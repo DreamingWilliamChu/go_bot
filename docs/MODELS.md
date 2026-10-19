@@ -82,7 +82,7 @@ Measured with `gobot bench --quick --visits 24` on the cloud VM used for develop
 
 ¹ `katago benchmark` for tf3-b10c512 hit the tool's 3,600 s limit, so its analysis step was skipped. `tf3-b11c768` and `b28c512-conv` were not benchmarked here (they load and answer in the integration tests).
 
-On this CPU the transformer networks were **about 6× (tf2-b10c384) and 40× (tf3-b10c512) slower** than the convolutional b18 at equal thread counts, the opposite of upstream's NVIDIA results. Under the rule above the run selected **`b18c384-conv`** (effective Elo 13051 vs 12750 for tf2-b10c384). The Metal backend on the M1 GPU may rank them differently, which is why the default must be measured on the Mac rather than copied from here.
+On this CPU the transformer networks were **about 6× (tf2-b10c384) and 40× (tf3-b10c512) slower** than the convolutional b18 at equal thread counts, the opposite of upstream's NVIDIA results. Applied to these results, the rule above selects **`b18c384-conv`** (effective Elo 13051 vs 12750 for tf2-b10c384; the run itself still used the earlier rule, which picked tf2). The Metal backend on the M1 GPU may rank them differently, which is why the default must be measured on the Mac rather than copied from here.
 
 Note: the quick visit counts include process warm-up on a slow CPU (for example tf2 took 8.9 s to return its "2 s" Quick result), so they understate steady-state speed.
 
