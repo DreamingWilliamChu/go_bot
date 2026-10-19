@@ -1,0 +1,38 @@
+{
+  "description": "Hand-checked coordinate vectors shared by the Python and TypeScript test suites. x = column from left, y = row from top (0-based).",
+  "points": [
+    {"size": 19, "x": 0, "y": 0, "gtp": "A19", "sgf": "aa", "ownershipIndex": 0},
+    {"size": 19, "x": 18, "y": 18, "gtp": "T1", "sgf": "ss", "ownershipIndex": 360},
+    {"size": 19, "x": 18, "y": 0, "gtp": "T19", "sgf": "sa", "ownershipIndex": 18},
+    {"size": 19, "x": 0, "y": 18, "gtp": "A1", "sgf": "as", "ownershipIndex": 342},
+    {"size": 19, "x": 7, "y": 0, "gtp": "H19", "sgf": "ha", "ownershipIndex": 7},
+    {"size": 19, "x": 8, "y": 0, "gtp": "J19", "sgf": "ia", "ownershipIndex": 8},
+    {"size": 19, "x": 15, "y": 3, "gtp": "Q16", "sgf": "pd", "ownershipIndex": 72},
+    {"size": 19, "x": 3, "y": 15, "gtp": "D4", "sgf": "dp", "ownershipIndex": 288},
+    {"size": 19, "x": 9, "y": 9, "gtp": "K10", "sgf": "jj", "ownershipIndex": 180},
+    {"size": 13, "x": 0, "y": 0, "gtp": "A13", "sgf": "aa", "ownershipIndex": 0},
+    {"size": 13, "x": 12, "y": 12, "gtp": "N1", "sgf": "mm", "ownershipIndex": 168},
+    {"size": 13, "x": 8, "y": 4, "gtp": "J9", "sgf": "ie", "ownershipIndex": 60},
+    {"size": 13, "x": 6, "y": 6, "gtp": "G7", "sgf": "gg", "ownershipIndex": 84},
+    {"size": 13, "x": 3, "y": 9, "gtp": "D4", "sgf": "dj", "ownershipIndex": 120},
+    {"size": 9, "x": 0, "y": 0, "gtp": "A9", "sgf": "aa", "ownershipIndex": 0},
+    {"size": 9, "x": 8, "y": 8, "gtp": "J1", "sgf": "ii", "ownershipIndex": 80},
+    {"size": 9, "x": 4, "y": 4, "gtp": "E5", "sgf": "ee", "ownershipIndex": 40},
+    {"size": 9, "x": 7, "y": 2, "gtp": "H7", "sgf": "hc", "ownershipIndex": 25},
+    {"size": 9, "x": 2, "y": 6, "gtp": "C3", "sgf": "cg", "ownershipIndex": 56}
+  ],
+  "passes": [
+    {"size": 19, "gtp": "pass", "sgf": ""},
+    {"size": 19, "gtp": "pass", "sgf": "tt"},
+    {"size": 9, "gtp": "pass", "sgf": ""}
+  ],
+  "invalid": [
+    {"size": 19, "gtp": "I5"},
+    {"size": 19, "gtp": "U1"},
+    {"size": 19, "gtp": "A20"},
+    {"size": 19, "gtp": "A0"},
+    {"size": 9, "gtp": "K1"},
+    {"size": 13, "sgf": "an"},
+    {"size": 9, "sgf": "zz"}
+  ]
+}

@@ -1,0 +1,104 @@
+{
+  "schema": 1,
+  "recorded": "2026-10-19",
+  "notes": "sha256 and sizes were computed from files downloaded on 2026-10-19. Elo values are kata1 rating-game Elo copied from https://katagotraining.org/networks/ on that date; they compare nets at the rating games' settings, not at a fixed thinking time on an Apple M1.",
+  "engine": {
+    "name": "KataGo",
+    "license": "MIT (https://github.com/lightvector/KataGo/blob/master/LICENSE)",
+    "mac": {
+      "install": "brew install katago",
+      "version": "1.18.2 (Homebrew formula; built with -DUSE_BACKEND=METAL on Apple Silicon)",
+      "source_url": "https://github.com/lightvector/KataGo/archive/refs/tags/v1.18.2.tar.gz",
+      "source_sha256": "fefd554bfaf0daa00d97ac3a767c7aef8d303545b135b0fbf8bd6837772f8bf9",
+      "backend": "Metal (MPSGraph GPU, optional CoreML/Neural Engine threads)"
+    },
+    "linux_ci": {
+      "version": "1.18.1",
+      "url": "https://github.com/lightvector/KataGo/releases/download/v1.18.1/katago-v1.18.1-eigenavx2-linux-x64.zip",
+      "size": 41821245,
+      "sha256": "33e79780dbe3bf6ee859e16f64952cdfc90f7210c8f71ad978ffcba85ad20d79",
+      "backend": "Eigen (CPU, AVX2) - used only for tests/CI, not for Mac analysis"
+    }
+  },
+  "networks": [
+    {
+      "id": "tf3-b11c768",
+      "role": "max",
+      "label": "Maximum strength (kata1 transformer b11c768)",
+      "file": "kata1-tf3-b11c768-s11003M-d5973M-7gres.bin.gz",
+      "url": "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-tf3-b11c768-s11003M-d5973M-7gres.bin.gz",
+      "size": 262039869,
+      "sha256": "93bdb63a3bfae4a70db0cb5265287495ecfc10b1ba1cc6814feeba1cdf055871",
+      "architecture": "transformer (nbt, 70.4M params)",
+      "kata1_elo": 14602.0,
+      "license": "KataGo Neural Network License (MIT-style), https://katagotraining.org/network_license/",
+      "default_download": false
+    },
+    {
+      "id": "tf3-b10c512",
+      "role": "default-candidate",
+      "label": "Strong default (kata1 transformer b10c512)",
+      "file": "kata1-tf3-b10c512-s3203M-d5937M.bin.gz",
+      "url": "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-tf3-b10c512-s3203M-d5937M.bin.gz",
+      "size": 94281753,
+      "sha256": "c04db4a503721d948bb720324f3cbdac6088cc9eb243632f020e4b6846f58995",
+      "architecture": "transformer (nbt, 28.5M params)",
+      "kata1_elo": 14166.6,
+      "license": "KataGo Neural Network License (MIT-style), https://katagotraining.org/network_license/",
+      "default_download": true
+    },
+    {
+      "id": "tf2-b10c384",
+      "role": "light",
+      "label": "Light/fast (kata1 transformer b10c384)",
+      "file": "kata1-tf2-b10c384-s2941M-d5872M.bin.gz",
+      "url": "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-tf2-b10c384-s2941M-d5872M.bin.gz",
+      "size": 38245507,
+      "sha256": "8015d49bdf45854c94e5f9e22b2b70e8738d3e56a6edca730e5b82509998a5b5",
+      "architecture": "transformer (nbt, 10.5M params)",
+      "kata1_elo": 13706.7,
+      "license": "KataGo Neural Network License (MIT-style), https://katagotraining.org/network_license/",
+      "default_download": true
+    },
+    {
+      "id": "b18c384-conv",
+      "role": "compat-fallback",
+      "label": "Convolutional fallback (kata1 b18c384nbt, bundled by Homebrew)",
+      "file": "kata1-b18c384nbt-s9996604416-d4316597426.bin.gz",
+      "url": "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b18c384nbt-s9996604416-d4316597426.bin.gz",
+      "size": 97898094,
+      "sha256": "9d7a6afed8ff5b74894727e156f04f0cd36060a24824892008fbb6e0cba51f1d",
+      "architecture": "convolutional (nbt, 26.3M params)",
+      "kata1_elo": 13619.9,
+      "license": "KataGo Neural Network License (MIT-style), https://katagotraining.org/network_license/",
+      "default_download": true,
+      "homebrew_bundled": true
+    },
+    {
+      "id": "b28c512-conv",
+      "role": "optional-comparison",
+      "label": "Strongest convolutional (kata1 b28c512nbt)",
+      "file": "kata1-b28c512nbt-s13255194368-d5935380940.bin.gz",
+      "url": "https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b28c512nbt-s13255194368-d5935380940.bin.gz",
+      "size": 271440852,
+      "sha256": "c5bca453d7b08ea8df6546439325d4dd681e77d975e1da3f7593d771147b73bc",
+      "architecture": "convolutional (nbt, 72.8M params)",
+      "kata1_elo": 14102.6,
+      "license": "KataGo Neural Network License (MIT-style), https://katagotraining.org/network_license/",
+      "default_download": false
+    }
+  ],
+  "recognition": [
+    {
+      "id": "moku-v4",
+      "label": "moku-v4 board/stone detector (RT-DETR r18vd + corner head, ONNX)",
+      "file": "moku-v4.onnx",
+      "url": "https://huggingface.co/kaya-go/moku-v4/resolve/0449e6af8c67c24c0709752970dc2d4205314a43/model.onnx",
+      "revision": "0449e6af8c67c24c0709752970dc2d4205314a43",
+      "size": 82575979,
+      "sha256": "1cb25057bbc433f4db6838ce28a4dfa9c1ffb2d9b7e0d078aa437eb9ae79dc94",
+      "license": "AGPL-3.0 (https://github.com/kaya-go/moku)",
+      "default_download": true
+    }
+  ]
+}

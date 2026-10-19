@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+
+# Downloaded weights and runtime data (never committed)
+models/*
+!models/manifest.json
+!models/README.md
+data/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
