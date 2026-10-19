@@ -95,7 +95,7 @@ One photo cannot show which moves led to the position or whether a ko is current
 
 ¹ From KataGo's training-run rating games, not measured at a fixed thinking time on an M1.
 
-`./scripts/benchmark.sh` measures visits per second, memory and visits per preset for each installed network on your Mac. It then saves the strongest network that reaches at least 1,000 visits in the 6-second Standard preset within 35% of RAM. Details, the selection rule and the cloud measurements are in [docs/MODELS.md](docs/MODELS.md). You can switch networks at any time on the **Engine** tab. If a network fails to load (for example, out of memory), the app falls back to the light network and then to the convolutional one, and tells you.
+`./scripts/benchmark.sh` measures visits per second, memory and visits per preset for each installed network on your Mac. It then saves the network with the best kata1 Elo after a speed penalty (150 Elo for each halving of visits below 1,000 in the 6-second Standard preset; the 150 is an assumption), among those using at most 35% of RAM. Details, the selection rule and the cloud measurements are in [docs/MODELS.md](docs/MODELS.md). You can switch networks at any time on the **Engine** tab. If a network fails to load (for example, out of memory), the app falls back to the light network and then to the convolutional one, and tells you.
 
 ## Commands
 

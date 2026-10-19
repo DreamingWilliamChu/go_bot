@@ -118,13 +118,20 @@ def test_benchmark_parsing_and_selection():
     rs = [
         res("light", 13700, 400, 2400, 500),
         res("strong", 14167, 200, 1200, 800),
-        res("max", 14602, 60, 360, 1500),
+        res("max", 14602, 60, 360, 3500),  # over 35% of 8 GB
     ]
     sel = select(rs, 8 * gb)
     assert sel["model_id"] == "strong" and sel["light_model_id"] == "light"
-    # if the strong one is too slow, fall back to the light one
+    # with enough RAM, "max" counts: 360 visits costs it ~221 Elo (1.47 halvings), still above "strong"
+    assert select(rs, 16 * gb)["model_id"] == "max"
+    # a stronger network that is far too slow loses to a faster one (cloud CPU: b18 at 72 visits beats
+    # a transformer at 12 visits); a moderately slower one still wins
     rs[1]["analysis"]["queries"][0]["visits"] = 500
+    assert select(rs, 8 * gb)["model_id"] == "strong"
+    rs[1]["analysis"]["queries"][0]["visits"] = 100
     assert select(rs, 8 * gb)["model_id"] == "light"
+    cpu = [res("b18", 13620, 6.8, 72, 741), res("tf2", 13707, 1.05, 12, 186)]
+    assert select(cpu, 16 * gb)["model_id"] == "b18"
     # memory limit excludes networks
     big = [res("max", 14602, 900, 5000, 4000), res("light", 13700, 400, 2400, 500)]
     assert select(big, 8 * gb)["model_id"] == "light"

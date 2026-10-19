@@ -8,10 +8,10 @@ For each installed network (and, on Apple Silicon, each Metal mode):
     thinking-time preset -> visits reached, elapsed time
  3. peak resident memory of the KataGo process (psutil sampling)
 
-Selection rule (an explicit assumption, see docs/MODELS.md): among networks that loaded and ran,
-pick the one with the highest kata1 Elo that reaches at least ``MIN_STANDARD_VISITS`` visits on
-the 19x19 middle-game position in the Standard preset and whose peak RSS stays below
-``MAX_RSS_FRACTION`` of RAM. The fastest network is kept as the light fallback.
+Selection rule (an explicit assumption, see docs/MODELS.md): among networks that loaded, ran and
+stay below ``MAX_RSS_FRACTION`` of RAM, pick the highest "effective Elo": kata1 Elo minus
+``ELO_PER_DOUBLING`` for every halving of visits below ``MIN_STANDARD_VISITS`` on the 19x19
+middle-game position in the Standard preset. The fastest network is kept as the light fallback.
 """
 
 from __future__ import annotations
@@ -179,6 +179,20 @@ async def analysis_timings(
     return {"startup_seconds": round(startup, 2), "queries": rows, "peak_rss_mb": round(mon.peak / 2**20, 1)}
 
 
+ELO_PER_DOUBLING = 150.0  # assumption: approximate value of doubling visits at low visit counts
+
+
+def effective_elo(elo: float, visits: int) -> float:
+    """kata1 Elo, minus ELO_PER_DOUBLING for every halving of visits below MIN_STANDARD_VISITS.
+
+    This is a rough trade-off (an assumption, not a measurement): a network that is stronger per
+    evaluation but gets far fewer visits in the same time can be weaker in practice.
+    """
+    import math
+
+    return elo + ELO_PER_DOUBLING * min(0.0, math.log2(max(visits, 1) / MIN_STANDARD_VISITS))
+
+
 def select(results: list[dict[str, Any]], mem_bytes: int) -> dict[str, Any]:
     usable = []
     for r in results:
@@ -194,17 +208,17 @@ def select(results: list[dict[str, Any]], mem_bytes: int) -> dict[str, Any]:
         r["standard_visits_19x19_middle"] = visits
         r["fits_memory"] = rss <= MAX_RSS_FRACTION * mem_bytes
         r["meets_visits"] = visits >= MIN_STANDARD_VISITS
+        r["effective_elo"] = round(effective_elo(r["elo"] or 0, visits), 1)
         usable.append(r)
     if not usable:
         return {"model_id": None, "reason": "no network ran successfully"}
-    ok = [r for r in usable if r["fits_memory"] and r["meets_visits"]]
-    pool = ok or [r for r in usable if r["fits_memory"]] or usable
-    best = max(pool, key=lambda r: (r["elo"] or 0, r["benchmark"]["best_visits_per_s"] or 0))
+    pool = [r for r in usable if r["fits_memory"]] or usable
+    best = max(pool, key=lambda r: (r["effective_elo"], r["benchmark"]["best_visits_per_s"] or 0))
     fastest = max(usable, key=lambda r: r["benchmark"]["best_visits_per_s"] or 0)
     reason = (
-        f"highest kata1 Elo with >= {MIN_STANDARD_VISITS} visits in Standard on 19x19 and RSS <= {int(MAX_RSS_FRACTION * 100)}% RAM"
-        if ok
-        else "no network met the visit target; chose the strongest that fits in memory"
+        f"highest kata1 Elo after a {ELO_PER_DOUBLING:.0f}-Elo-per-halving penalty below "
+        f"{MIN_STANDARD_VISITS} visits (Standard preset, 19x19 middle game), peak RSS <= "
+        f"{int(MAX_RSS_FRACTION * 100)}% RAM"
     )
     return {
         "model_id": best["model_id"],
@@ -224,8 +238,8 @@ def markdown(report: dict[str, Any]) -> str:
         f"* KataGo: {report['katago']['version']} ({report['katago']['backend']})",
         "* Measured on this machine. Elo is kata1 rating-game Elo from katagotraining.org (not measured here).",
         "",
-        "| Network | Mode | kata1 Elo | Best threads | visits/s | Standard (6 s) visits, 19x19 middle | Peak RSS MB | Startup s |",
-        "|---|---|---|---|---|---|---|---|",
+        "| Network | Mode | kata1 Elo | Best threads | visits/s | Standard (6 s) visits, 19x19 middle | Effective Elo | Peak RSS MB | Startup s |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for r in report["results"]:
         b = r["benchmark"]
@@ -236,6 +250,7 @@ def markdown(report: dict[str, Any]) -> str:
         lines.append(
             f"| {r['model_id']} | {r['mode']} | {r['elo'] or '–'} | {b.get('best_threads') or '–'} | "
             f"{b.get('best_visits_per_s') or 'failed'} | {std[0]['visits'] if std else '–'} | "
+            f"{r.get('effective_elo', '–')} | "
             f"{max(b.get('peak_rss_mb', 0), a.get('peak_rss_mb', 0))} | {a.get('startup_seconds', '–')} |"
         )
     sel = report["selection"]

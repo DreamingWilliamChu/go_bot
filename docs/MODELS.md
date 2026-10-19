@@ -45,7 +45,15 @@ All candidates are from KataGo's public training run (katagotraining.org), under
 - real analysis through the app on representative positions (19×19 opening, middle game and endgame; 13×13; 9×9) for each preset;
 - peak memory.
 
-It then selects the highest-Elo network that reaches **≥ 1,000 visits in the Standard (6 s) preset on the 19×19 middle game** with **peak RSS ≤ 35% of RAM**, and keeps the fastest one as the light fallback. The 1,000-visit bar is a judgement call: below a few hundred visits per move, the advantage of a stronger network tends to be eaten by the shallower search. Override it any time on the Engine tab or with `--model`.
+It then picks the network with the highest **effective Elo** among those whose peak RSS is at most 35% of RAM, and keeps the fastest one as the light fallback:
+
+```
+effective Elo = kata1 Elo − 150 × log2(1000 / visits)    (only when visits < 1000)
+```
+
+where *visits* is what the network reached in the Standard (6 s) preset on the 19×19 middle-game position. In words: a network that reaches 1,000 visits keeps its full rating, and each halving below that costs it 150 Elo. Examples: 14167 at 500 visits → 14017; 14602 at 360 visits → 14381; 13707 at 12 visits → 12750.
+
+**The 150 Elo per halving is an assumption**, not a measurement on your Mac. It is a rough figure for the value of doubling the search at low visit counts; the true value varies with the network and the position. It makes the trade-off explicit: a stronger network wins unless it is much slower. Override the choice any time on the Engine tab or with `--model`.
 
 Until you run the benchmark, the app uses `tf3-b10c512` if it is downloaded.
 
@@ -64,7 +72,19 @@ or `./scripts/benchmark.sh` (full: 5 thread counts and both Metal modes, 30-90 m
 
 ### Cloud CPU (not representative of the Mac)
 
-CLOUD_BENCH_PLACEHOLDER
+Measured with `gobot bench --quick --visits 24` on the cloud VM used for development: Intel Xeon 2.1 GHz, 4 cores, no GPU, 15.7 GB RAM, official KataGo 1.18.1 **Eigen (CPU)** build. These numbers say nothing about Metal speed on an M1; they are here only to show that the benchmark runs end to end and how the selection rule behaves.
+
+| Network | Best threads | visits/s (`katago benchmark`) | Standard (6 s) visits, 19×19 middle | Quick (2 s) visits, 19×19 middle | 13×13 Quick / Standard visits | Peak RSS | Start-up |
+|---|---|---|---|---|---|---|---|
+| `b18c384-conv` | 4 | 6.79 (4.23 with 2 threads) | 72 | 14 | 15 / 78 | 741 MB | 2.9 s |
+| `tf2-b10c384` | 4 | 1.05 (0.58 with 2 threads) | 12 | 5 | 5 / 19 | 186 MB | 0.9 s |
+| `tf3-b10c512` | 2 | 0.10 (about 0.14-0.18 with 4 threads, partial) | not run¹ | not run¹ | not run¹ | 444 MB | – |
+
+¹ `katago benchmark` for tf3-b10c512 hit the tool's 3,600 s limit, so its analysis step was skipped. `tf3-b11c768` and `b28c512-conv` were not benchmarked here (they load and answer in the integration tests).
+
+On this CPU the transformer networks were **about 6× (tf2-b10c384) and 40× (tf3-b10c512) slower** than the convolutional b18 at equal thread counts, the opposite of upstream's NVIDIA results. Under the rule above the run selected **`b18c384-conv`** (effective Elo 13051 vs 12750 for tf2-b10c384). The Metal backend on the M1 GPU may rank them differently, which is why the default must be measured on the Mac rather than copied from here.
+
+Note: the quick visit counts include process warm-up on a slow CPU (for example tf2 took 8.9 s to return its "2 s" Quick result), so they understate steady-state speed.
 
 ## Thinking-time presets
 
