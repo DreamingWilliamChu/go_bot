@@ -27,7 +27,7 @@ from gobot.vision import stones
 from gobot.vision.geometry import order_corners
 from gobot.vision.pipeline import Recognizer
 
-ALL_SETS = ("tengen", "moku-v3-test", "goban_data_set", "synthetic")
+ALL_SETS = ("tengen", "moku-v3-test", "goban_data_set", "synthetic", "user")
 
 
 def load_sets(root: Path, names: Iterable[str]) -> dict[str, list[Sample]]:
@@ -41,6 +41,10 @@ def load_sets(root: Path, names: Iterable[str]) -> dict[str, list[Sample]]:
             ]
         elif name == "goban_data_set" and (root / "goban_data_set").is_dir():
             out[name] = list(datasets.goban_data_set(root / "goban_data_set"))[::4]  # every 4th photo
+        elif name == "user":
+            us = list(datasets.user_testset(root.parent / "user_testset"))
+            if us:
+                out[name] = us
         elif name == "synthetic":
             from gobot.eval.synthetic import synthetic
 

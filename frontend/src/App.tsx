@@ -65,14 +65,16 @@ export function App() {
 
   const analysis = useAnalysis(refreshStatus)
 
-  // Pairing link: https://mac:8000/#pair=TOKEN
+  // Pairing link: https://mac:8000/#pair=TOKEN (fresh load from the QR code, or a hash change when
+  // the link is opened in a tab that already shows the app).
   useEffect(() => {
-    const m = /#pair=([\w-]+)/.exec(location.hash)
-    const finish = () => {
-      history.replaceState(null, '', location.pathname)
-      refreshStatus()
-    }
-    if (m) {
+    const tryPair = (): boolean => {
+      const m = /#pair=([\w-]+)/.exec(location.hash)
+      if (!m) return false
+      const finish = () => {
+        history.replaceState(null, '', location.pathname)
+        refreshStatus()
+      }
       api
         .post('/api/pair', { token: m[1] })
         .then(() => {
@@ -84,7 +86,11 @@ export function App() {
           toast((e as Error).message)
           finish()
         })
-    } else refreshStatus()
+      return true
+    }
+    if (!tryPair()) refreshStatus()
+    window.addEventListener('hashchange', tryPair)
+    return () => window.removeEventListener('hashchange', tryPair)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

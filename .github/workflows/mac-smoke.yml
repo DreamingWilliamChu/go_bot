@@ -1,0 +1,35 @@
+name: macOS install smoke test
+
+# Manual: exercises the documented Mac install path (Homebrew KataGo, uv, Node) on an Apple
+# Silicon runner. Hosted runners are virtual machines and may not expose the GPU to Metal, so the
+# KataGo search step is informative only; real M1 performance must be measured with
+# ./scripts/benchmark.sh on the Mac itself.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mac:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup script (installs katago, uv, node with Homebrew; downloads networks)
+        run: ./scripts/setup_mac.sh
+      - run: katago version
+      - run: uv run gobot hardware
+      - run: uv run pytest -q tests/test_coords.py tests/test_query.py tests/test_image_io.py tests/test_stage3.py tests/test_photos_api.py
+      - name: KataGo Metal search (may fail on VMs without GPU access)
+        continue-on-error: true
+        run: uv run pytest -q tests/test_katago_real.py
+      - name: Quick benchmark (informative only)
+        continue-on-error: true
+        run: ./scripts/benchmark.sh --quick --models tf2-b10c384 --visits 100 --no-select
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-smoke
+          path: |
+            data/hardware.json
+            data/benchmark

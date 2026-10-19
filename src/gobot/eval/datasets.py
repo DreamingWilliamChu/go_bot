@@ -189,3 +189,24 @@ def goban_data_set(root: Path, limit: int | None = None) -> Iterator[Sample]:
             board=None,
             grid_corners=np.array(list(pts.values())),
         )
+
+
+def user_testset(root: Path) -> Iterator[Sample]:
+    """Photos saved from the app with "Save as test case" (data/user_testset/<id>/)."""
+    if not root.is_dir():
+        return
+    for d in sorted(p for p in root.iterdir() if p.is_dir()):
+        photo, board, labels = d / "photo.jpg", d / "board.txt", d / "labels.json"
+        if not (photo.is_file() and board.is_file() and labels.is_file()):
+            continue
+        meta = json.loads(labels.read_text())
+        yield Sample(
+            set="user",
+            name=d.name,
+            group=d.name,
+            size=int(meta["boardSize"]),
+            load=_load_path(photo),
+            board=parse_dotbw(board.read_text()),
+            grid_corners=np.array(meta["gridCorners"], dtype=np.float64),  # as confirmed by the user
+            rotation_free=False,  # saved in photo orientation
+        )

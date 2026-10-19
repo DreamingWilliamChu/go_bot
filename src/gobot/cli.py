@@ -86,6 +86,7 @@ def main(argv: list[str] | None = None) -> int:
         "--http-helper-port", type=int, default=8080, help="plain-HTTP port for CA download (--https)"
     )
     s.add_argument("--new-token", action="store_true", help="generate a new pairing token")
+    s.add_argument("--lan-ip", default=None, help="LAN address to advertise (default: auto-detect)")
     s.add_argument("--model", default=None, help="model id from models/manifest.json or a .bin.gz path")
     s.add_argument("--no-engine-warmup", action="store_true", help="do not start KataGo until first request")
 

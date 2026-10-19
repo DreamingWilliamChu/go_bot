@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import os
 import socket
 
 import psutil
@@ -38,6 +39,9 @@ def candidate_ips() -> list[tuple[str, str]]:
 
 
 def lan_ip() -> str | None:
+    override = os.environ.get("GOBOT_LAN_IP")
+    if override:
+        return override
     # Route lookup without sending packets: picks the interface used for the default route.
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:

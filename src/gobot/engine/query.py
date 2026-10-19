@@ -111,11 +111,11 @@ class Position(BaseModel):
 
 
 class AnalyzeParams(BaseModel):
-    max_time: float = Field(6.0, gt=0, le=MAX_THINK_SECONDS)
-    max_visits: int | None = Field(None, ge=1, le=UNLIMITED_VISITS)
+    max_time: float = Field(default=6.0, gt=0, le=MAX_THINK_SECONDS)
+    max_visits: int | None = Field(default=None, ge=1, le=UNLIMITED_VISITS)
     include_ownership: bool = True
-    pv_len: int = Field(15, ge=1, le=40)
-    report_every: float = Field(0.5, ge=0.1, le=10)
+    pv_len: int = Field(default=15, ge=1, le=40)
+    report_every: float = Field(default=0.5, ge=0.1, le=10)
 
 
 def build_query(qid: str, pos: Position, params: AnalyzeParams) -> dict[str, Any]:

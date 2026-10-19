@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import contextlib
 import html
+import os
 import sys
 
 import uvicorn
@@ -92,6 +93,8 @@ def serve(settings: Settings, args: argparse.Namespace) -> int:
         )
         return 2
 
+    if getattr(args, "lan_ip", None):
+        os.environ["GOBOT_LAN_IP"] = args.lan_ip
     token = (
         load_or_create_token(settings.data_dir / "token", regenerate=args.new_token) if settings.lan else None
     )
