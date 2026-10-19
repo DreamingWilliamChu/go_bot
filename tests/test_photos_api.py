@@ -18,7 +18,9 @@ def client(tmp_settings, tmp_path):
     from gobot.settings import repo_root
 
     shutil.copy(repo_root() / "models" / "manifest.json", tmp_settings.models_dir / "manifest.json")
-    return TestClient(create_app(tmp_settings, start_engine=False), client=("127.0.0.1", 5000))
+    return TestClient(
+        create_app(tmp_settings, start_engine=False), client=("127.0.0.1", 5000), base_url="http://localhost"
+    )
 
 
 def test_upload_recognize_and_testcase(tmp_settings, tmp_path):

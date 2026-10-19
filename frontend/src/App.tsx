@@ -102,6 +102,15 @@ export function App() {
     return () => window.clearTimeout(t)
   }, [status, refreshStatus])
 
+  // Each tab starts at the top (e.g. after confirming a photo the board should be in view).
+  useEffect(() => {
+    try {
+      window.scrollTo({ top: 0 })
+    } catch {
+      /* old browsers */
+    }
+  }, [tab])
+
   useEffect(() => save('gobot.game.v1', game), [game])
   useEffect(() => save('gobot.prefs.v1', prefs), [prefs])
 

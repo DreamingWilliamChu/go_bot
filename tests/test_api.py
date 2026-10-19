@@ -10,7 +10,7 @@ from .conftest import needs_katago
 
 def client_for(settings, token=None, host="127.0.0.1"):
     app = create_app(settings, token=token, start_engine=False)
-    return TestClient(app, client=(host, 50000))
+    return TestClient(app, client=(host, 50000), base_url="http://localhost")
 
 
 def test_status_and_frontend_fallback(tmp_settings, tmp_path):
@@ -69,13 +69,16 @@ def test_ws_rejects_unpaired_lan_client(tmp_settings):
         import pytest
         from starlette.websockets import WebSocketDisconnect
 
-        with pytest.raises(WebSocketDisconnect) as ei, c.websocket_connect("/api/analyze") as ws:
+        with (
+            pytest.raises(WebSocketDisconnect) as ei,
+            c.websocket_connect("ws://localhost/api/analyze") as ws,
+        ):
             ws.receive_json()
         assert ei.value.code == 4401
 
 
 def test_ws_invalid_position(tmp_settings):
-    with client_for(tmp_settings) as c, c.websocket_connect("/api/analyze") as ws:
+    with client_for(tmp_settings) as c, c.websocket_connect("ws://localhost/api/analyze") as ws:
         ws.send_json({"type": "analyze", "requestId": "r1", "position": {"size": 15}})
         msg = ws.receive_json()
         assert msg["type"] == "error" and msg["kind"] == "invalid" and msg["requestId"] == "r1"
@@ -95,7 +98,7 @@ def test_ws_engine_unavailable(tmp_settings, tmp_path):
     orig = st.Settings.find_katago
     st.Settings.find_katago = lambda self: None  # type: ignore[method-assign]
     try:
-        with client_for(tmp_settings) as c, c.websocket_connect("/api/analyze") as ws:
+        with client_for(tmp_settings) as c, c.websocket_connect("ws://localhost/api/analyze") as ws:
             ws.send_json({"type": "analyze", "requestId": "r1", "position": {"size": 9}})
             msgs = [ws.receive_json() for _ in range(2)]
             err = [m for m in msgs if m["type"] == "error"][0]
@@ -107,7 +110,7 @@ def test_ws_engine_unavailable(tmp_settings, tmp_path):
 @needs_katago("b18c384-conv")
 def test_ws_real_analysis_roundtrip(tmp_settings):
     tmp_settings.model = "b18c384-conv"
-    with client_for(tmp_settings) as c, c.websocket_connect("/api/analyze") as ws:
+    with client_for(tmp_settings) as c, c.websocket_connect("ws://localhost/api/analyze") as ws:
         ws.send_json(
             {
                 "type": "analyze",
@@ -135,3 +138,29 @@ def test_ws_real_analysis_roundtrip(tmp_settings):
         assert final["engine"]["modelId"] == "b18c384-conv"
         assert final["engine"]["version"]
         assert final["candidates"]
+
+
+def test_dns_rebinding_and_cross_site_requests_refused(tmp_settings):
+    import pytest
+    from starlette.websockets import WebSocketDisconnect
+
+    with client_for(tmp_settings) as c:
+        # DNS rebinding: a hostile domain resolving to 127.0.0.1
+        assert c.get("/api/status", headers={"host": "evil.example:8000"}).status_code == 421
+        # cross-site POST from a page on another origin
+        r = c.post("/api/engine/restart", headers={"origin": "https://evil.example"})
+        assert r.status_code == 403
+        # same-origin is fine (the app itself)
+        assert c.get("/api/status", headers={"origin": "http://localhost"}).status_code == 200
+        # cross-site websocket (CSWSH)
+        with (
+            pytest.raises(WebSocketDisconnect) as ei,
+            c.websocket_connect(
+                "ws://localhost/api/analyze", headers={"origin": "https://evil.example"}
+            ) as ws,
+        ):
+            ws.receive_json()
+        assert ei.value.code == 4403
+        with c.websocket_connect("ws://localhost/api/analyze", headers={"origin": "http://localhost"}) as ws:
+            ws.send_json({"type": "ping"})
+            assert ws.receive_json() == {"type": "pong"}

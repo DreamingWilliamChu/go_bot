@@ -80,32 +80,77 @@ class TokenAuth:
         return False
 
 
+def _host_only(value: str) -> str:
+    """'example.local:8000' -> 'example.local'; '[::1]:8000' -> '::1'."""
+    v = value.strip().lower()
+    if v.startswith("["):
+        return v[1 : v.find("]")] if "]" in v else v
+    return v.rsplit(":", 1)[0] if v.count(":") == 1 else v
+
+
+def _origin_host(origin: str) -> str:
+    o = origin.strip().lower()
+    if "://" in o:
+        o = o.split("://", 1)[1]
+    return o.split("/", 1)[0]
+
+
 class AuthMiddleware:
-    def __init__(self, app: ASGIApp, auth: TokenAuth):
+    """Pairing check plus two browser protections for a server that trusts loopback:
+
+    * Host allow-list (``allowed_hosts``): blocks DNS-rebinding pages that reach 127.0.0.1 under
+      their own domain name.
+    * Same-origin check for websockets and state-changing requests: a page on another site open in
+      the Mac's browser cannot drive the API (cross-site websocket / form posts).
+    """
+
+    def __init__(self, app: ASGIApp, auth: TokenAuth, allowed_hosts: set[str] | None = None):
         self.app = app
         self.auth = auth
+        self.allowed_hosts = {h.lower() for h in allowed_hosts} if allowed_hosts else None
+
+    async def _reject(self, scope: Scope, send: Send, status: int, message: str, ws_code: int) -> None:
+        if scope["type"] == "websocket":
+            await send({"type": "websocket.close", "code": ws_code})
+            return
+        body = json.dumps({"detail": message}).encode()
+        await send(
+            {
+                "type": "http.response.start",
+                "status": status,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body)).encode()),
+                ],
+            }
+        )
+        await send({"type": "http.response.body", "body": body})
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] in ("http", "websocket"):
+            headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
+            host_header = headers.get("host", "")
+            if self.allowed_hosts is not None and _host_only(host_header) not in self.allowed_hosts:
+                await self._reject(scope, send, 421, "Unknown host name for this server.", 4421)
+                return
+            origin = headers.get("origin")
+            unsafe = scope["type"] == "websocket" or scope.get("method", "GET") not in (
+                "GET",
+                "HEAD",
+                "OPTIONS",
+            )
+            if origin and unsafe and origin != "null" and _origin_host(origin) != host_header.strip().lower():
+                await self._reject(scope, send, 403, "Cross-site request refused.", 4403)
+                return
             path: str = scope.get("path", "")
             protected = path.startswith("/api") and path not in PUBLIC_API_PATHS
             if protected and not self.auth.check_scope(scope):
-                if scope["type"] == "websocket":
-                    await send({"type": "websocket.close", "code": 4401})
-                    return
-                body = json.dumps(
-                    {"detail": "Not paired. Scan the QR code shown on the Mac (or open its pairing link)."}
-                ).encode()
-                await send(
-                    {
-                        "type": "http.response.start",
-                        "status": 401,
-                        "headers": [
-                            (b"content-type", b"application/json"),
-                            (b"content-length", str(len(body)).encode()),
-                        ],
-                    }
+                await self._reject(
+                    scope,
+                    send,
+                    401,
+                    "Not paired. Scan the QR code shown on the Mac (or open its pairing link).",
+                    4401,
                 )
-                await send({"type": "http.response.body", "body": body})
                 return
         await self.app(scope, receive, send)

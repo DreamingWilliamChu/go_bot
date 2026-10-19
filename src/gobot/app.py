@@ -248,8 +248,25 @@ def create_app(
 
     # ------------------------------------------------------------------ frontend
     _mount_frontend(app, settings.frontend_dist)
-    app.add_middleware(AuthMiddleware, auth=auth)  # type: ignore[arg-type]
+    app.add_middleware(AuthMiddleware, auth=auth, allowed_hosts=allowed_hosts(settings))  # type: ignore[arg-type]
     return app
+
+
+def allowed_hosts(settings: Settings) -> set[str]:
+    """Host names this server answers to (DNS-rebinding protection). Extend with GOBOT_ALLOWED_HOSTS."""
+    import os
+
+    from gobot.netinfo import lan_ip, local_hostname
+
+    hosts = {"localhost", "127.0.0.1", "::1"}
+    if settings.lan or settings.host not in ("127.0.0.1", "localhost", "::1"):
+        ip = lan_ip()
+        if ip:
+            hosts.add(ip)
+        name = local_hostname().lower()
+        hosts |= {name, name.removesuffix(".local")}
+    hosts |= {h.strip().lower() for h in os.environ.get("GOBOT_ALLOWED_HOSTS", "").split(",") if h.strip()}
+    return hosts
 
 
 def _short(e: ValidationError) -> str:

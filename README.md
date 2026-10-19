@@ -23,6 +23,12 @@ Photograph a physical Go board with your iPhone, or choose a photo. Your Mac rec
   - Localhost-only by default. `--lan` lets your phone connect after scanning a pairing QR code.
   - Optional `--https`, with a private certificate authority, for the live camera preview.
 
+| Check the photo, correct the stones | Analysis (desktop) | Analysis (iPhone size) |
+|---|---|---|
+| ![Photo review](docs/img/desktop-photo-review.jpg) | ![Analysis](docs/img/desktop-analysis.jpg) | ![Phone](docs/img/phone-analysis.jpg) |
+
+*Screenshots from the cloud test run (KataGo CPU build). On the Mac the backend line reads Metal.*
+
 > **Status of device testing.** Everything was built and tested on a Linux cloud machine, using KataGo's official CPU (Eigen) build and real kata1 networks, and headless Chromium at iPhone and desktop sizes. It has **not** been run on an M1 Mac (Metal speed, memory and the default network choice) or on a physical iPhone (Safari, camera, HEIC, Wi-Fi). See [What was verified](#what-was-verified) and the [checklist for your devices](#checklist-for-your-mac-and-iphone).
 
 ## Requirements

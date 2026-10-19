@@ -22,6 +22,10 @@ export function visitsText(v: number | undefined): string {
   return v === undefined ? '–' : v.toLocaleString('en-US')
 }
 
+export function visitsLabel(v: number): string {
+  return `${visitsText(v)} ${v === 1 ? 'visit' : 'visits'}`
+}
+
 export const CAND_LABELS = ['A', 'B', 'C']
 
 /**

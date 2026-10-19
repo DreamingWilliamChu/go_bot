@@ -6,6 +6,7 @@ import {
   pct,
   playerWinrate,
   summarize,
+  visitsLabel,
   visitsText,
 } from './format'
 
@@ -158,7 +159,7 @@ export function AnalysisPanel(p: Props) {
                   </span>
                 </div>
                 <div class="muted small">
-                  Score {leadText(c.blackScoreLead)} · {visitsText(c.visits)} visits
+                  Score {leadText(c.blackScoreLead)} · {visitsLabel(c.visits)}
                 </div>
               </div>
               <button
