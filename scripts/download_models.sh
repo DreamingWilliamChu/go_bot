@@ -6,4 +6,5 @@
 #   ./scripts/download_models.sh tf3-b11c768 b28c512-conv   specific ids
 set -euo pipefail
 cd "$(dirname "$0")/.."
+. scripts/_env.sh
 exec uv run --frozen gobot models download "$@"

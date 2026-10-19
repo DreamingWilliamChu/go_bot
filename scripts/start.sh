@@ -5,6 +5,7 @@
 #   --https     HTTPS with a local certificate authority (needed for the live camera preview)
 set -euo pipefail
 cd "$(dirname "$0")/.."
+. scripts/_env.sh
 if [ ! -f frontend/dist/index.html ]; then
   echo "The web app is not built yet. Run ./scripts/setup_mac.sh first."; exit 1
 fi

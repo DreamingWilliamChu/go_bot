@@ -102,3 +102,19 @@ def test_manual_corners_used_and_only_nudged():
     assert res.status == "ok" and res.corner_source == "manual"
     assert corner_error(np.array(res.corners), gt, 13) < 0.15
     assert res.grid_score is not None and res.grid_score > GRID_ACCEPT
+
+
+@pytest.mark.parametrize("seed,size", [(21, 9), (22, 13), (23, 19)])
+def test_photo_orientation_matches_board_coordinates(seed, size):
+    """The reconstructed board must be in photo orientation: grid (0, 0) is the top-left crossing of
+    the photo, so no rotation is needed to match the rendered truth (x right, y down)."""
+    rgb, truth, _ = synth_photo(seed, size)
+    assert (truth != np.rot90(truth)).any()  # asymmetric position, so a rotation would be detected
+    res = Recognizer(None).recognize(rgb, size)
+    assert res.status == "ok"
+    pred = np.array(res.board)
+    errors_by_rotation = [int((np.rot90(truth, k) != pred).sum()) for k in range(4)]
+    assert errors_by_rotation[0] == min(errors_by_rotation) <= 2
+    # top-left reported corner is the top-left of the image quadrant
+    c = np.array(res.corners)
+    assert c[0].sum() == c.sum(axis=1).min()

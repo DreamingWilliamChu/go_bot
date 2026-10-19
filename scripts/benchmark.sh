@@ -7,4 +7,5 @@
 # Stop the app first (both use the GPU).
 set -euo pipefail
 cd "$(dirname "$0")/.."
+. scripts/_env.sh
 exec uv run --frozen gobot bench "$@"
