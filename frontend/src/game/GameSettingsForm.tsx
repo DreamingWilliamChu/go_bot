@@ -4,7 +4,7 @@ import { type Color, DEFAULT_KOMI, RULES, type Rules, validKomi } from './game'
 
 export interface GameSettingsValue {
   size: BoardSize
-  player: Color
+  player: Color | null // null = not chosen yet (photo flow requires an explicit choice)
   rules: Rules
   komi: number
 }

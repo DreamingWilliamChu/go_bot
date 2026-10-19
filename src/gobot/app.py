@@ -241,6 +241,11 @@ def create_app(
             for t in tasks:
                 t.cancel()
 
+    # ------------------------------------------------------------------ photos
+    from gobot.web.photos import attach as attach_photos
+
+    attach_photos(app, settings)
+
     # ------------------------------------------------------------------ frontend
     _mount_frontend(app, settings.frontend_dist)
     app.add_middleware(AuthMiddleware, auth=auth)  # type: ignore[arg-type]

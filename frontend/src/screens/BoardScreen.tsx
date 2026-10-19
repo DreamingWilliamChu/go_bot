@@ -281,8 +281,8 @@ export function BoardScreen(p: Props) {
               onChange={(v) => {
                 if (v.size !== draft.size) {
                   if (draft.initialStones.length && !confirm('Changing the board size clears the board. Continue?')) return
-                  setDraft({ ...draft, size: v.size, initialStones: [], initialPlayer: v.player, rules: v.rules, komi: v.komi })
-                } else setDraft({ ...draft, initialPlayer: v.player, rules: v.rules, komi: v.komi })
+                  setDraft({ ...draft, size: v.size, initialStones: [], initialPlayer: v.player ?? 'B', rules: v.rules, komi: v.komi })
+                } else setDraft({ ...draft, initialPlayer: v.player ?? 'B', rules: v.rules, komi: v.komi })
               }}
               idPrefix="setup"
             />
