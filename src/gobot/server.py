@@ -10,6 +10,7 @@ import contextlib
 import html
 import os
 import signal
+import socket
 import sys
 
 import uvicorn
@@ -91,6 +92,19 @@ def print_qr(url: str) -> None:
         pass
 
 
+def port_in_use(host: str, port: int) -> bool:
+    """Whether uvicorn would fail to listen on (host, port). Uses SO_REUSEADDR like uvicorn, so a
+    port only lingering from a server that just stopped does not count as busy."""
+    family = socket.AF_INET6 if ":" in host else socket.AF_INET
+    with socket.socket(family, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.bind((host, port))
+        except OSError:
+            return True
+    return False
+
+
 def _tunnel_ready(url: str) -> None:
     banner(
         [
@@ -130,6 +144,22 @@ def serve(settings: Settings, args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
+
+    # Check every port before printing the banner or starting cloudflared, so a second copy of the
+    # app stops with one line instead of a traceback (and without touching the running tunnel).
+    ports = [(settings.host, settings.port, "")]
+    if settings.https and settings.lan:
+        ports.append((settings.host, int(args.http_helper_port), " (certificate helper)"))
+    if settings.tunnel:
+        ports.append(("127.0.0.1", settings.tunnel_port, " (Cloudflare tunnel)"))
+    for host, port, what in ports:
+        if port_in_use(host, port):
+            print(
+                f"Port {port}{what} is already in use, probably by another copy of gobot: "
+                "stop that one first (Ctrl+C in its terminal), or start with --port N.",
+                file=sys.stderr,
+            )
+            return 1
 
     if getattr(args, "lan_ip", None):
         os.environ["GOBOT_LAN_IP"] = args.lan_ip

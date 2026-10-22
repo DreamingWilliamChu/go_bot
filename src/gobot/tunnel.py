@@ -131,7 +131,9 @@ def create_named_tunnel(binary: str, name: str, hostname: str, log: Callable[[st
     dashboard, point ``hostname`` at it and return its token. Needs ``cloudflared tunnel login``."""
 
     def run(*args: str) -> tuple[int, str]:
-        p = subprocess.run([binary, "tunnel", *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        p = subprocess.run(
+            [binary, "tunnel", *args], capture_output=True, text=True, stdin=subprocess.DEVNULL
+        )
         return p.returncode, (p.stdout + p.stderr).strip()
 
     code, out = run("create", name)

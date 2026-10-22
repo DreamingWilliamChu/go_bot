@@ -123,7 +123,9 @@ def _cmd_tunnel(args: argparse.Namespace, settings: Settings) -> int:
             print("cloudflared is not installed. Run: brew install cloudflared", file=sys.stderr)
             return 1
         try:
-            host = tn.normalize_hostname(args.hostname or tn.load_tunnel_config(settings.root).get("hostname") or "")
+            host = tn.normalize_hostname(
+                args.hostname or tn.load_tunnel_config(settings.root).get("hostname") or ""
+            )
         except ValueError:
             print("Pass --hostname, e.g. --hostname go.example.com", file=sys.stderr)
             return 2
