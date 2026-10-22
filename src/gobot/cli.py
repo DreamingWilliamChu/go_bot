@@ -115,6 +115,35 @@ def _cmd_tunnel(args: argparse.Namespace, settings: Settings) -> int:
         token_file.unlink(missing_ok=True)
         print("Removed this device's tunnel token.")
         return 0
+    if args.action == "create":
+        import subprocess
+
+        binary = tn.find_cloudflared()
+        if not binary:
+            print("cloudflared is not installed. Run: brew install cloudflared", file=sys.stderr)
+            return 1
+        try:
+            host = tn.normalize_hostname(args.hostname or tn.load_tunnel_config(settings.root).get("hostname") or "")
+        except ValueError:
+            print("Pass --hostname, e.g. --hostname go.example.com", file=sys.stderr)
+            return 2
+        if args.hostname:
+            p = tn.save_tunnel_config(settings.root, host, autostart=not args.no_autostart)
+            print(f"Saved {p} (commit it so every checkout uses this hostname; it contains no secret).")
+        if not tn.origin_cert_present():
+            print("Opening Cloudflare in the browser: sign in, then choose the domain of", host)
+            if subprocess.run([binary, "tunnel", "login"]).returncode != 0:
+                print("cloudflared login did not finish.", file=sys.stderr)
+                return 1
+        try:
+            token = tn.create_named_tunnel(binary, args.name, host)
+        except (tn.TunnelSetupError, ValueError) as e:
+            print(e, file=sys.stderr)
+            return 1
+        tn.save_tunnel_token(settings.data_dir, token)
+        print(f"Saved the tunnel token to {token_file} (this device only; never committed).")
+        print("Start the app with ./scripts/start.sh and remote access starts by itself.")
+        return 0
     if args.action == "setup":
         if not args.hostname:
             print("Pass --hostname, e.g. --hostname go.example.com", file=sys.stderr)
@@ -178,9 +207,12 @@ def main(argv: list[str] | None = None) -> int:
     t = sub.add_parser(
         "tunnel", help="set up remote access through your own domain (named Cloudflare tunnel)"
     )
-    t.add_argument("action", choices=["setup", "token", "show", "forget-token"])
-    t.add_argument("--hostname", default=None, help="public hostname, e.g. go.example.com (setup)")
-    t.add_argument("--no-autostart", action="store_true", help="only start the tunnel with --tunnel (setup)")
+    t.add_argument("action", choices=["create", "setup", "token", "show", "forget-token"])
+    t.add_argument("--hostname", default=None, help="public hostname, e.g. go.example.com (create, setup)")
+    t.add_argument("--name", default="gobot", help="tunnel name in your Cloudflare account (create)")
+    t.add_argument(
+        "--no-autostart", action="store_true", help="only start the tunnel with --tunnel (create, setup)"
+    )
 
     a = sub.add_parser("account", help="set the sign-in username/password, or sign out every device")
     a.add_argument("action", choices=["set", "show", "logout-all"])

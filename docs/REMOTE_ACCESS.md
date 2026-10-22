@@ -44,6 +44,19 @@ With a domain on Cloudflare (a free plan is enough), the app gets a fixed addres
 ### Once, in Cloudflare
 
 1. Add your domain to Cloudflare, if it is not there yet: **Add a site** in the dashboard, then change the domain's name servers at your registrar to the two Cloudflare shows.
+
+Then create the tunnel, **either** from the terminal (no Zero Trust sign-up, so no payment card) **or** in the Zero Trust dashboard (steps 2–4).
+
+**From the terminal**, once the domain shows *Active* in Cloudflare:
+
+```bash
+uv run gobot tunnel create --hostname go.example.com
+```
+
+The first time, a browser window opens: sign in to Cloudflare and choose your domain. gobot then creates a tunnel named `gobot`, adds the DNS record for `go.example.com`, and saves the token on this Mac. Skip steps 2–4 and the `tunnel setup` command below; commit `config/tunnel.json` as shown there. Other devices still get the token with `uv run gobot tunnel token`. Print it on this Mac with `cloudflared tunnel token gobot`, or run `uv run gobot tunnel create` on the other device too, after its own browser sign-in.
+
+**In the Zero Trust dashboard:**
+
 2. Go to **Zero Trust → Networks → Tunnels → Create a tunnel**, choose **Cloudflared** and name it, for example `gobot`.
 3. The next page shows an install command containing a long token starting with `eyJ`. Copy it, but **do not run the command**; gobot starts cloudflared itself.
 4. Under **Public hostname**, add subdomain `go` and domain `example.com`, with service type **HTTP** and URL **`127.0.0.1:8001`**. If you start the app with `--port N`, use port N+1. Save. Cloudflare creates the DNS record.

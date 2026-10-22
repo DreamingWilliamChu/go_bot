@@ -108,7 +108,7 @@ One photo cannot show which moves led to the position or whether a ko is current
 | `./scripts/setup_mac.sh [--max] [--no-models]` | Install or refresh everything |
 | `./scripts/start.sh [--lan] [--https] [--tunnel] [--port N] [--model ID] [--new-token]` | Run the app |
 | `uv run gobot account set [--username U] \| show \| logout-all` | Set the sign-in password, or sign out every device |
-| `uv run gobot tunnel setup --hostname H \| token \| show` | Remote access on your own domain (see docs/REMOTE_ACCESS.md) |
+| `uv run gobot tunnel create --hostname H \| setup --hostname H \| token \| show` | Remote access on your own domain (see docs/REMOTE_ACCESS.md) |
 | `./scripts/benchmark.sh [--quick] [--models …] [--modes gpu mux] [--no-select]` | Benchmark and pick the default network |
 | `./scripts/download_models.sh [--max \| --all \| ids…]` | Download networks or moku (sha256-checked) |
 | `./scripts/update.sh` | Pull and refresh |

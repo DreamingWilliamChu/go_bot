@@ -7,6 +7,7 @@ Two kinds of tunnel:
 * **Named tunnel** (your Cloudflare account and domain): create a tunnel in the Cloudflare dashboard
   (Zero Trust > Networks > Tunnels), add a public hostname pointing to ``http://127.0.0.1:<port>``,
   and give gobot its token (``GOBOT_TUNNEL_TOKEN`` or ``data/tunnel_token``). The address stays the same.
+  ``gobot tunnel create`` does the same through ``cloudflared tunnel login`` without the dashboard.
 
 For a named tunnel shared by every checkout of the repository, ``config/tunnel.json`` (committed,
 not secret) names the public hostname. Each device stores the secret token once in its git-ignored
@@ -115,6 +116,41 @@ def load_tunnel_token(data_dir: Path) -> str | None:
     return None
 
 
+class TunnelSetupError(RuntimeError):
+    pass
+
+
+def origin_cert_present() -> bool:
+    """Whether ``cloudflared tunnel login`` has been done on this device."""
+    env = os.environ.get("TUNNEL_ORIGIN_CERT")
+    return Path(env).is_file() if env else (Path.home() / ".cloudflared" / "cert.pem").is_file()
+
+
+def create_named_tunnel(binary: str, name: str, hostname: str, log: Callable[[str], None] = print) -> str:
+    """Create (or reuse) a named tunnel with cloudflared's own login instead of the Zero Trust
+    dashboard, point ``hostname`` at it and return its token. Needs ``cloudflared tunnel login``."""
+
+    def run(*args: str) -> tuple[int, str]:
+        p = subprocess.run([binary, "tunnel", *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        return p.returncode, (p.stdout + p.stderr).strip()
+
+    code, out = run("create", name)
+    if code == 0:
+        log(f"Created tunnel '{name}'.")
+    elif "already exists" in out:
+        log(f"Using the existing tunnel '{name}'.")
+    else:
+        raise TunnelSetupError(f"cloudflared could not create the tunnel: {out}")
+    code, out = run("route", "dns", name, hostname)
+    if code != 0:
+        raise TunnelSetupError(f"cloudflared could not point {hostname} at the tunnel: {out}")
+    log(f"{hostname} now points to tunnel '{name}'.")
+    code, out = run("token", name)
+    if code != 0:
+        raise TunnelSetupError(f"cloudflared could not fetch the tunnel token: {out}")
+    return parse_tunnel_token(out)[0]
+
+
 @dataclass
 class TunnelPlan:
     enabled: bool
@@ -165,17 +201,25 @@ class Tunnel:
     def status(self) -> dict[str, Any]:
         return {"mode": self.mode, "state": self.state, "url": self.url, "error": self.error}
 
+    def command(self) -> tuple[list[str], dict[str, str]]:
+        """The cloudflared command line and environment. A named tunnel also gets ``--url``: a tunnel
+        made with ``gobot tunnel create`` has no routes stored at Cloudflare and uses it, while one made
+        in the dashboard replaces it with the routes from the dashboard."""
+        assert self.binary
+        cmd = [self.binary, "tunnel", "--no-autoupdate"]
+        env = dict(os.environ)
+        if self.token:
+            cmd += ["run", "--url", self.local_url]
+            env["TUNNEL_TOKEN"] = self.token
+        else:
+            cmd += ["--url", self.local_url]
+        return cmd, env
+
     def start(self) -> bool:
         if not self.binary:
             self.state, self.error = "error", "cloudflared is not installed. Run: brew install cloudflared"
             return False
-        cmd = [self.binary, "tunnel", "--no-autoupdate"]
-        env = dict(os.environ)
-        if self.token:
-            cmd += ["run"]
-            env["TUNNEL_TOKEN"] = self.token
-        else:
-            cmd += ["--url", self.local_url]
+        cmd, env = self.command()
         try:
             self._proc = subprocess.Popen(
                 cmd,
