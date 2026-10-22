@@ -1,4 +1,4 @@
-"""Command line entry point: ``gobot serve|models|hardware|bench|eval|certs``."""
+"""Command line entry point: ``gobot serve|account|tunnel|models|hardware|bench|eval|certs``."""
 
 from __future__ import annotations
 
@@ -64,6 +64,81 @@ def _cmd_hardware(args: argparse.Namespace, settings: Settings) -> int:
     return 0
 
 
+def _cmd_account(args: argparse.Namespace, settings: Settings) -> int:
+    import getpass
+
+    from gobot.accounts import AccountError, AccountStore
+
+    store = AccountStore(settings.account_json)
+    if args.action == "show":
+        print(f"username: {store.username}")
+        print(f"password: {'set' if store.password_set else 'NOT SET'}")
+        return 0
+    if args.action == "logout-all":
+        print(f"Signed out {store.end_all_sessions()} session(s).")
+        return 0
+    pw = getpass.getpass(f"New password for {args.username or store.username}: ")
+    if getpass.getpass("Repeat it: ") != pw:
+        print("The passwords do not match.", file=sys.stderr)
+        return 1
+    try:
+        store.set_credentials(args.username, pw)
+    except AccountError as e:
+        print(e, file=sys.stderr)
+        return 1
+    print(f"Saved. Sign in as '{store.username}'. Every other signed-in device was signed out.")
+    return 0
+
+
+def _cmd_tunnel(args: argparse.Namespace, settings: Settings) -> int:
+    import getpass
+
+    from gobot import tunnel as tn
+
+    token_file = settings.data_dir / "tunnel_token"
+    cfg_path = tn.tunnel_config_path(settings.root)
+    if args.action == "show":
+        cfg = tn.load_tunnel_config(settings.root)
+        tok = tn.load_tunnel_token(settings.data_dir)
+        tid = None
+        if tok:
+            try:
+                tid = tn.parse_tunnel_token(tok)[1]
+            except ValueError:
+                tid = "INVALID TOKEN"
+        print(f"hostname:   {cfg.get('hostname') or '(none: quick tunnels with --tunnel)'}  [{cfg_path}]")
+        print(f"autostart:  {cfg.get('autostart', True) if cfg else '-'}")
+        print(f"token:      {'tunnel ' + tid if tid else 'none on this device'}")
+        print(f"cloudflared: {tn.find_cloudflared() or 'not installed (brew install cloudflared)'}")
+        return 0
+    if args.action == "forget-token":
+        token_file.unlink(missing_ok=True)
+        print("Removed this device's tunnel token.")
+        return 0
+    if args.action == "setup":
+        if not args.hostname:
+            print("Pass --hostname, e.g. --hostname go.example.com", file=sys.stderr)
+            return 2
+        try:
+            p = tn.save_tunnel_config(settings.root, args.hostname, autostart=not args.no_autostart)
+        except ValueError as e:
+            print(e, file=sys.stderr)
+            return 2
+        print(f"Saved {p} (commit it so every checkout uses this hostname; it contains no secret).")
+        if tn.load_tunnel_token(settings.data_dir):
+            return 0
+    raw = getpass.getpass("Paste the Cloudflare tunnel token (input hidden): ")
+    try:
+        token, tunnel_id = tn.parse_tunnel_token(raw)
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return 1
+    tn.save_tunnel_token(settings.data_dir, token)
+    print(f"Saved the token for tunnel {tunnel_id} to {token_file} (this device only; never committed).")
+    print("Start the app with ./scripts/start.sh and remote access starts by itself.")
+    return 0
+
+
 def _cmd_serve(args: argparse.Namespace, settings: Settings) -> int:
     from gobot.server import serve
 
@@ -89,6 +164,27 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--lan-ip", default=None, help="LAN address to advertise (default: auto-detect)")
     s.add_argument("--model", default=None, help="model id from models/manifest.json or a .bin.gz path")
     s.add_argument("--no-engine-warmup", action="store_true", help="do not start KataGo until first request")
+    s.add_argument(
+        "--tunnel", action="store_true", help="remote access through a Cloudflare tunnel (sign-in required)"
+    )
+    s.add_argument(
+        "--tunnel-port", type=int, default=0, help="loopback port for cloudflared (default port+1)"
+    )
+    s.add_argument("--tunnel-hostname", default=None, help="public hostname of a named tunnel (for display)")
+    s.add_argument(
+        "--no-tunnel", action="store_true", help="do not start the tunnel set up in config/tunnel.json"
+    )
+
+    t = sub.add_parser(
+        "tunnel", help="set up remote access through your own domain (named Cloudflare tunnel)"
+    )
+    t.add_argument("action", choices=["setup", "token", "show", "forget-token"])
+    t.add_argument("--hostname", default=None, help="public hostname, e.g. go.example.com (setup)")
+    t.add_argument("--no-autostart", action="store_true", help="only start the tunnel with --tunnel (setup)")
+
+    a = sub.add_parser("account", help="set the sign-in username/password, or sign out every device")
+    a.add_argument("action", choices=["set", "show", "logout-all"])
+    a.add_argument("--username", default=None, help="new username (set)")
 
     m = sub.add_parser("models", help="list or download networks")
     m.add_argument("action", choices=["list", "download"])
@@ -124,6 +220,10 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_serve(args, settings)
     if args.cmd == "models":
         return _cmd_models(args, settings)
+    if args.cmd == "account":
+        return _cmd_account(args, settings)
+    if args.cmd == "tunnel":
+        return _cmd_tunnel(args, settings)
     if args.cmd == "hardware":
         return _cmd_hardware(args, settings)
     if args.cmd == "bench":

@@ -72,7 +72,30 @@ export interface StatusResponse {
   rules: string[]
   lan: boolean
   https: boolean
+  tunnel: boolean
   recognition: RecognitionStatus | null
+}
+
+/** Who this browser is to the server (GET /api/auth/info, public). */
+export interface AuthInfo {
+  /** This browser must sign in (or pair) before it can use the app. */
+  required: boolean
+  signedIn: boolean
+  user: string | null
+  /** A browser on the Mac itself: always trusted. */
+  mac: boolean
+  passwordSet: boolean
+  /** LAN pairing with the QR code is possible from here. */
+  pairing: boolean
+  /** Connected through the Cloudflare tunnel. */
+  tunnel: boolean
+}
+
+export interface TunnelInfo {
+  mode: 'quick' | 'named' | null
+  state: 'off' | 'stopped' | 'starting' | 'running' | 'error'
+  url: string | null
+  error: string | null
 }
 
 export interface RecognitionStatus {

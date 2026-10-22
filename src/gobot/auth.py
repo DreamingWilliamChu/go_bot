@@ -1,11 +1,14 @@
-"""Pairing-token access control for LAN mode.
+"""Access control: pairing token (LAN), sign-in sessions, and the Cloudflare tunnel.
 
 * Requests from the Mac itself (loopback) are always allowed.
 * With ``require_token`` (LAN mode) every other client must present the pairing cookie, obtained by
   POSTing the token from the QR code / pairing URL to ``/api/pair``, or an
-  ``Authorization: Bearer <token>`` header.
+  ``Authorization: Bearer <token>`` header, or a sign-in session cookie (see ``accounts.py``).
+* Requests through the Cloudflare tunnel arrive on a separate loopback port that is wrapped in
+  ``TunnelMarker``. cloudflared runs on the Mac, so these requests look local; the marker makes sure
+  they are never trusted as loopback and never accept the pairing token: only a sign-in session.
 * Static frontend files are public (they contain no data), so the phone can load the page and
-  complete pairing; every ``/api`` route and websocket is protected.
+  sign in or pair; every ``/api`` route and websocket is protected.
 """
 
 from __future__ import annotations
@@ -20,8 +23,11 @@ from http.cookies import SimpleCookie
 from pathlib import Path
 from typing import Any
 
+from gobot.accounts import SESSION_COOKIE, AccountStore
+
 COOKIE_NAME = "gobot_pair"
-PUBLIC_API_PATHS = {"/api/pair", "/api/health"}
+PUBLIC_API_PATHS = {"/api/pair", "/api/health", "/api/auth/info", "/api/login", "/api/logout"}
+TUNNEL_SCOPE_KEY = "gobot.tunnel"
 
 Scope = MutableMapping[str, Any]
 Receive = Callable[[], Awaitable[MutableMapping[str, Any]]]
@@ -49,6 +55,47 @@ def is_loopback(host: str | None) -> bool:
     return host in ("127.0.0.1", "::1", "localhost") or bool(host and host.startswith("127."))
 
 
+def is_tunnel(scope: Scope) -> bool:
+    return bool(scope.get(TUNNEL_SCOPE_KEY))
+
+
+def _headers(scope: Scope) -> dict[str, str]:
+    return {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
+
+
+def get_cookie(scope: Scope, name: str) -> str | None:
+    raw = _headers(scope).get("cookie")
+    if not raw:
+        return None
+    c: SimpleCookie = SimpleCookie()
+    try:
+        c.load(raw)
+    except Exception:
+        return None
+    m = c.get(name)
+    return m.value if m else None
+
+
+class TunnelMarker:
+    """Wraps the app for the port cloudflared connects to.
+
+    Marks every request as coming through the tunnel and replaces the client address (always
+    127.0.0.1, cloudflared itself) with the visitor's address from ``Cf-Connecting-Ip``, so loopback
+    checks fail and sign-in rate limits apply per visitor.
+    """
+
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] in ("http", "websocket"):
+            visitor = _headers(scope).get("cf-connecting-ip", "").strip() or "tunnel"
+            if is_loopback(visitor):
+                visitor = "tunnel"
+            scope = {**scope, TUNNEL_SCOPE_KEY: True, "client": (visitor, 0)}
+        await self.app(scope, receive, send)
+
+
 class TokenAuth:
     def __init__(self, token: str | None, require: bool):
         self.token = token
@@ -58,26 +105,18 @@ class TokenAuth:
         return bool(self.token and candidate and hmac.compare_digest(candidate, self.token))
 
     def check_scope(self, scope: Scope) -> bool:
+        if is_tunnel(scope):
+            return False  # from the internet: a sign-in session is the only way in
         if not self.require:
             return True
         client = scope.get("client")
         if client and is_loopback(client[0]):
             return True
-        headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
-        auth = headers.get("authorization", "")
+        auth = _headers(scope).get("authorization", "")
         if auth.lower().startswith("bearer ") and self.check_token(auth[7:].strip()):
             return True
-        raw_cookie = headers.get("cookie")
-        if raw_cookie and self.token:
-            c: SimpleCookie = SimpleCookie()
-            try:
-                c.load(raw_cookie)
-            except Exception:
-                return False
-            m = c.get(COOKIE_NAME)
-            if m and hmac.compare_digest(m.value, cookie_value(self.token)):
-                return True
-        return False
+        paired = get_cookie(scope, COOKIE_NAME)
+        return bool(paired and self.token and hmac.compare_digest(paired, cookie_value(self.token)))
 
 
 def _host_only(value: str) -> str:
@@ -104,10 +143,22 @@ class AuthMiddleware:
       the Mac's browser cannot drive the API (cross-site websocket / form posts).
     """
 
-    def __init__(self, app: ASGIApp, auth: TokenAuth, allowed_hosts: set[str] | None = None):
+    def __init__(
+        self,
+        app: ASGIApp,
+        auth: TokenAuth,
+        allowed_hosts: set[str] | None = None,
+        accounts: AccountStore | None = None,
+    ):
         self.app = app
         self.auth = auth
+        self.accounts = accounts
         self.allowed_hosts = {h.lower() for h in allowed_hosts} if allowed_hosts else None
+
+    def allowed(self, scope: Scope) -> bool:
+        if self.auth.check_scope(scope):
+            return True
+        return bool(self.accounts and self.accounts.valid_session(get_cookie(scope, SESSION_COOKIE)))
 
     async def _reject(self, scope: Scope, send: Send, status: int, message: str, ws_code: int) -> None:
         if scope["type"] == "websocket":
@@ -128,9 +179,12 @@ class AuthMiddleware:
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] in ("http", "websocket"):
-            headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
+            headers = _headers(scope)
             host_header = headers.get("host", "")
-            if self.allowed_hosts is not None and _host_only(host_header) not in self.allowed_hosts:
+            # The tunnel's public name is chosen by Cloudflare (quick tunnels) and the port is only
+            # reachable through cloudflared, so the host allow-list does not apply there.
+            check_host = self.allowed_hosts is not None and not is_tunnel(scope)
+            if check_host and _host_only(host_header) not in self.allowed_hosts:  # type: ignore[operator]
                 await self._reject(scope, send, 421, "Unknown host name for this server.", 4421)
                 return
             origin = headers.get("origin")
@@ -144,13 +198,7 @@ class AuthMiddleware:
                 return
             path: str = scope.get("path", "")
             protected = path.startswith("/api") and path not in PUBLIC_API_PATHS
-            if protected and not self.auth.check_scope(scope):
-                await self._reject(
-                    scope,
-                    send,
-                    401,
-                    "Not paired. Scan the QR code shown on the Mac (or open its pairing link).",
-                    4401,
-                )
+            if protected and not self.allowed(scope):
+                await self._reject(scope, send, 401, "Please sign in.", 4401)
                 return
         await self.app(scope, receive, send)

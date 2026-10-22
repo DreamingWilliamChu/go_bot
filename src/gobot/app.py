@@ -15,11 +15,13 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, ValidationError
 
 from gobot import __version__, hardware
-from gobot.auth import COOKIE_NAME, AuthMiddleware, TokenAuth, cookie_value, is_loopback
+from gobot.accounts import AccountStore
+from gobot.auth import COOKIE_NAME, AuthMiddleware, TokenAuth, cookie_value
 from gobot.engine.katago import EngineError, EngineUnavailable, QueryError
 from gobot.engine.query import RULES, AnalyzeParams, Position
 from gobot.engine.service import EngineService
 from gobot.settings import Settings
+from gobot.web.account import is_mac
 
 log = logging.getLogger("gobot.app")
 
@@ -44,9 +46,11 @@ def create_app(
     token: str | None = None,
     start_engine: bool = True,
     pair_url: str | None = None,
+    accounts: AccountStore | None = None,
 ) -> FastAPI:
     settings = settings or Settings()
     auth = TokenAuth(token, settings.require_token)
+    accounts = accounts or AccountStore(settings.account_json)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
@@ -71,6 +75,8 @@ def create_app(
     app.state.settings = settings
     app.state.auth = auth
     app.state.pair_url = pair_url
+    app.state.accounts = accounts
+    app.state.tunnel = None  # gobot.tunnel.Tunnel, set by the server with --tunnel
 
     # ------------------------------------------------------------------ basics
     @app.get("/api/health")
@@ -88,6 +94,7 @@ def create_app(
             "rules": list(RULES),
             "lan": settings.lan,
             "https": settings.https,
+            "tunnel": request.app.state.tunnel is not None,
             "recognition": request.app.state.recognition_status()
             if hasattr(request.app.state, "recognition_status")
             else None,
@@ -143,15 +150,13 @@ def create_app(
 
     @app.get("/api/pair/info")
     async def pair_info(request: Request) -> dict[str, Any]:
-        client = request.client.host if request.client else None
-        if not is_loopback(client):
+        if not is_mac(request):
             raise HTTPException(403, "Pairing details are only shown on the Mac itself.")
         return {"url": request.app.state.pair_url, "lan": settings.lan, "https": settings.https}
 
     @app.get("/api/pair/qr.svg")
     async def pair_qr(request: Request) -> Response:
-        client = request.client.host if request.client else None
-        if not is_loopback(client):
+        if not is_mac(request):
             raise HTTPException(403, "Pairing details are only shown on the Mac itself.")
         url = request.app.state.pair_url
         if not url:
@@ -246,9 +251,19 @@ def create_app(
 
     attach_photos(app, settings)
 
+    # ------------------------------------------------------------------ sign-in, account, tunnel
+    from gobot.web.account import attach as attach_account
+
+    attach_account(app, accounts, auth)
+
     # ------------------------------------------------------------------ frontend
     _mount_frontend(app, settings.frontend_dist)
-    app.add_middleware(AuthMiddleware, auth=auth, allowed_hosts=allowed_hosts(settings))  # type: ignore[arg-type]
+    app.add_middleware(
+        AuthMiddleware,  # type: ignore[arg-type]
+        auth=auth,
+        allowed_hosts=allowed_hosts(settings),
+        accounts=accounts,
+    )
     return app
 
 

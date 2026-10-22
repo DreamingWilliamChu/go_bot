@@ -55,6 +55,8 @@ class Settings:
     lan: bool = False
     https: bool = False
     require_token: bool = False
+    tunnel: bool = False
+    tunnel_port: int = 0  # loopback port cloudflared connects to (0: port + 1)
 
     @property
     def manifest_path(self) -> Path:
@@ -75,6 +77,10 @@ class Settings:
     @property
     def uploads_dir(self) -> Path:
         return self.data_dir / "uploads"
+
+    @property
+    def account_json(self) -> Path:
+        return self.data_dir / "account.json"
 
     @property
     def certs_dir(self) -> Path:

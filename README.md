@@ -22,6 +22,8 @@ Photograph a physical Go board with your iPhone, or choose a photo. Your Mac rec
 - **Phone ↔ Mac:**
   - Localhost-only by default. `--lan` lets your phone connect after scanning a pairing QR code.
   - Optional `--https`, with a private certificate authority, for the live camera preview.
+- **Remote access with sign-in:** `--tunnel` makes the app reachable from anywhere through a Cloudflare Tunnel.
+  - Every device except the Mac signs in with a username and password, which you set and change under *Engine → Account*.
 
 | Check the photo, correct the stones | Analysis (desktop) | Analysis (iPhone size) |
 |---|---|---|
@@ -34,7 +36,7 @@ Photograph a physical Go board with your iPhone, or choose a photo. Your Mac rec
 ## Requirements
 
 - Apple Silicon Mac (M1 or newer), **macOS 14 Sonoma or newer**, about 1.5 GB free disk.
-- [Homebrew](https://brew.sh). The setup script uses it to install `katago`, `uv` and `node`.
+- [Homebrew](https://brew.sh). The setup script uses it to install `katago`, `uv`, `node` and `cloudflared`.
 - Internet access during installation only (Homebrew, Python and npm packages, about 0.3 GB of networks).
 - An iPhone on the same Wi-Fi network as the Mac (optional: the Mac's own browser works too).
 
@@ -62,9 +64,11 @@ git checkout claude/magical-allen-9xq915   # the branch this work is on (skip on
 ./scripts/start.sh            # this Mac only: open http://localhost:8000
 ./scripts/start.sh --lan      # also your iPhone: scan the QR code printed in the terminal
 ./scripts/start.sh --lan --https   # + live camera preview on the iPhone (one-time certificate install)
+./scripts/start.sh --tunnel   # from anywhere, through Cloudflare (set a sign-in password first)
+                              # with your own domain set up, plain ./scripts/start.sh connects to it
 ```
 
-Stop with `Ctrl+C`. The phone setup, the certificate steps and troubleshooting are in [docs/PHONE_SETUP.md](docs/PHONE_SETUP.md).
+Stop with `Ctrl+C`. The phone setup, the certificate steps and troubleshooting are in [docs/PHONE_SETUP.md](docs/PHONE_SETUP.md). Sign-in and remote access are described in [docs/REMOTE_ACCESS.md](docs/REMOTE_ACCESS.md).
 
 ## Update
 
@@ -102,7 +106,9 @@ One photo cannot show which moves led to the position or whether a ko is current
 | Command | What it does |
 |---|---|
 | `./scripts/setup_mac.sh [--max] [--no-models]` | Install or refresh everything |
-| `./scripts/start.sh [--lan] [--https] [--port N] [--model ID] [--new-token]` | Run the app |
+| `./scripts/start.sh [--lan] [--https] [--tunnel] [--port N] [--model ID] [--new-token]` | Run the app |
+| `uv run gobot account set [--username U] \| show \| logout-all` | Set the sign-in password, or sign out every device |
+| `uv run gobot tunnel setup --hostname H \| token \| show` | Remote access on your own domain (see docs/REMOTE_ACCESS.md) |
 | `./scripts/benchmark.sh [--quick] [--models …] [--modes gpu mux] [--no-select]` | Benchmark and pick the default network |
 | `./scripts/download_models.sh [--max \| --all \| ids…]` | Download networks or moku (sha256-checked) |
 | `./scripts/update.sh` | Pull and refresh |

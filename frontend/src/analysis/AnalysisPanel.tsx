@@ -111,7 +111,7 @@ export function AnalysisPanel(p: Props) {
       {p.connection !== 'open' ? (
         <p class="note warn">
           {p.connection === 'unauthorized'
-            ? 'Not paired with the Mac. Scan the pairing QR code again.'
+            ? 'Signed out. Reload the page and sign in again.'
             : 'Connecting to the Mac…'}
         </p>
       ) : null}

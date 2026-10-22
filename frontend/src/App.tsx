@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
-import { api, ApiError, type Preset, type StatusResponse } from './api/client'
+import { api, ApiError, type AuthInfo, type Preset, type StatusResponse } from './api/client'
 import { useAnalysis } from './analysis/useAnalysis'
 import { type GameState, currentBoard, newGame } from './game/game'
 import { BoardScreen } from './screens/BoardScreen'
+import { LoginScreen } from './screens/LoginScreen'
 import { PhotoScreen } from './screens/PhotoScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import { load, loadRaw, save } from './storage'
@@ -42,7 +43,7 @@ export function App() {
   const [prefs, setPrefs] = useState<Prefs>(() => load('gobot.prefs.v1', DEFAULT_PREFS))
   const [status, setStatus] = useState<StatusResponse | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
-  const [paired, setPaired] = useState<'unknown' | 'ok' | 'needed'>('unknown')
+  const [auth, setAuth] = useState<AuthInfo | null>(null)
   const toastTimer = useRef<number | undefined>(undefined)
 
   const toast = useCallback((m: string) => {
@@ -51,17 +52,29 @@ export function App() {
     toastTimer.current = window.setTimeout(() => setToastMsg(null), 4500)
   }, [])
 
+  const refreshAuth = useCallback(() => {
+    api
+      .get<AuthInfo>('/api/auth/info')
+      .then((a) => {
+        setAuth(a)
+        if (!a.required) {
+          api
+            .get<StatusResponse>('/api/status')
+            .then(setStatus)
+            .catch(() => undefined)
+        }
+      })
+      .catch(() => undefined)
+  }, [])
+
   const refreshStatus = useCallback(() => {
     api
       .get<StatusResponse>('/api/status')
-      .then((s) => {
-        setStatus(s)
-        setPaired('ok')
-      })
+      .then(setStatus)
       .catch((e) => {
-        if (e instanceof ApiError && e.status === 401) setPaired('needed')
+        if (e instanceof ApiError && e.status === 401) refreshAuth() // signed out meanwhile
       })
-  }, [])
+  }, [refreshAuth])
 
   const analysis = useAnalysis(refreshStatus)
 
@@ -73,7 +86,7 @@ export function App() {
       if (!m) return false
       const finish = () => {
         history.replaceState(null, '', location.pathname)
-        refreshStatus()
+        refreshAuth()
       }
       api
         .post('/api/pair', { token: m[1] })
@@ -88,7 +101,7 @@ export function App() {
         })
       return true
     }
-    if (!tryPair()) refreshStatus()
+    if (!tryPair()) refreshAuth()
     window.addEventListener('hashchange', tryPair)
     return () => window.removeEventListener('hashchange', tryPair)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -96,11 +109,12 @@ export function App() {
 
   // Poll engine status while it is starting or failing.
   useEffect(() => {
+    if (!auth || auth.required) return
     const st = status?.engine.state
     const delay = st === 'ready' ? 30000 : 3000
     const t = window.setTimeout(refreshStatus, delay)
     return () => window.clearTimeout(t)
-  }, [status, refreshStatus])
+  }, [status, auth, refreshStatus])
 
   // Each tab starts at the top (e.g. after confirming a photo the board should be in view).
   useEffect(() => {
@@ -146,7 +160,7 @@ export function App() {
             Go Analysis <span class="muted">围棋</span>
           </span>
         </div>
-        <nav class="tabs" role="tablist">
+        <nav class="tabs" role="tablist" hidden={!!auth?.required}>
           {(
             [
               ['board', 'Board'],
@@ -166,31 +180,23 @@ export function App() {
               : engineChip.error
                 ? 'KataGo error'
                 : `KataGo ${engineChip.state}`
-            : 'offline'}
+            : auth?.required
+              ? 'signed out'
+              : 'offline'}
         </span>
       </header>
 
-      {paired === 'needed' ? (
-        <div class="panel pairing" role="alert">
-          <h2>Pair this device</h2>
-          <p>
-            This Mac only answers devices that scanned its pairing QR code. On the Mac, run{' '}
-            <code>./scripts/start.sh --lan</code> and scan the QR code shown in the terminal (or under "Engine"
-            on the Mac).
-          </p>
-          <PairForm
-            onPaired={() => {
-              toast('Paired')
+      <main>
+        {auth === null ? null : auth.required ? (
+          <LoginScreen
+            info={auth}
+            onSignedIn={() => {
               analysis.reconnect()
-              refreshStatus()
+              refreshAuth()
             }}
             toast={toast}
           />
-        </div>
-      ) : null}
-
-      <main>
-        {tab === 'board' ? (
+        ) : tab === 'board' ? (
           <BoardScreen
             game={game}
             setGame={setGame}
@@ -223,7 +229,7 @@ export function App() {
             }}
           />
         ) : (
-          <SettingsScreen status={status} refreshStatus={refreshStatus} toast={toast} />
+          <SettingsScreen status={status} auth={auth} refreshStatus={refreshStatus} toast={toast} />
         )}
       </main>
 
@@ -233,33 +239,5 @@ export function App() {
         </div>
       ) : null}
     </div>
-  )
-}
-
-function PairForm({ onPaired, toast }: { onPaired: () => void; toast: (m: string) => void }) {
-  const [code, setCode] = useState('')
-  return (
-    <form
-      class="row"
-      onSubmit={(e) => {
-        e.preventDefault()
-        api
-          .post('/api/pair', { token: code.trim() })
-          .then(onPaired)
-          .catch((err) => toast((err as Error).message))
-      }}
-    >
-      <input
-        type="text"
-        placeholder="Pairing code"
-        value={code}
-        autoComplete="off"
-        autoCapitalize="off"
-        onInput={(e) => setCode((e.target as HTMLInputElement).value)}
-      />
-      <button class="btn primary" type="submit">
-        Pair
-      </button>
-    </form>
   )
 }

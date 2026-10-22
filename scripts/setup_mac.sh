@@ -42,8 +42,8 @@ if ! command -v brew >/dev/null 2>&1; then
   echo "  Homebrew is required. Install it from https://brew.sh, then re-run this script."; exit 1
 fi
 
-say "Installing KataGo (Metal backend), uv and Node.js with Homebrew"
-for pkg in katago uv node; do
+say "Installing KataGo (Metal backend), uv, Node.js and cloudflared (remote access) with Homebrew"
+for pkg in katago uv node cloudflared; do
   if brew list --versions "$pkg" >/dev/null 2>&1; then echo "  $pkg: $(brew list --versions "$pkg")"; else brew install "$pkg"; fi
 done
 echo "  $(katago version | head -1); $(katago version | grep -i 'backend' || true)"
@@ -72,5 +72,6 @@ Setup complete.
   Recommended once: ./scripts/benchmark.sh --quick   (measures speed on this Mac, picks the default network)
   Start (this Mac only):        ./scripts/start.sh
   Start for your iPhone:        ./scripts/start.sh --lan        (add --https for the live camera view)
+  Start for remote access:      ./scripts/start.sh --tunnel     (set a sign-in password first, see docs/REMOTE_ACCESS.md)
 Then open http://localhost:8000 on the Mac, or scan the QR code with the iPhone.
 MSG

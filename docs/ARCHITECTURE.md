@@ -16,7 +16,10 @@ iPhone Safari / desktop browser                         Mac (Apple Silicon)
 | Module | Role |
 |---|---|
 | `app.py` | FastAPI app: `/api/status`, `/api/models`, `/api/engine/*`, pairing, `/api/analyze` websocket, static files |
-| `auth.py` | Pairing token, HttpOnly cookie, ASGI middleware (HTTP and websocket). Loopback is always allowed |
+| `auth.py` | Pairing token, HttpOnly cookie, ASGI middleware (HTTP and websocket). Loopback is always allowed, except on the tunnel port (`TunnelMarker`) |
+| `accounts.py` | Sign-in account: scrypt password hash, hashed session cookies, failed-sign-in limits (`data/account.json`) |
+| `tunnel.py` | Starts/stops `cloudflared` (quick or named tunnel) and reads the public address from its log |
+| `web/account.py` | `/api/auth/info`, `/api/login`, `/api/logout`, `/api/account`, `/api/tunnel` |
 | `server.py`, `certs.py`, `netinfo.py` | Startup banner and QR code, LAN address, local CA and HTTPS, CA download helper |
 | `engine/katago.py` | Persistent `katago analysis` process; request ids, terminate, timeouts, crash and hang recovery, stale-result suppression, model fallback chain |
 | `engine/query.py` | Builds queries (`initialStones` + `initialPlayer`, then real `moves`) and normalises responses (Black perspective, explicit field names) |
@@ -56,6 +59,7 @@ Everything internal uses `(x, y)` with `y` counted from the top. That matches SG
 | `data/engine.json` | Selected network and KataGo settings (from the benchmark) | no |
 | `data/katago/analysis.cfg` | Generated KataGo config | no |
 | `data/token`, `data/certs/` | Pairing code, local CA and server certificate | no |
+| `data/account.json`, `data/tunnel_token` | Sign-in account and sessions (hashed); optional named-tunnel token | no |
 | `data/uploads/` | Normalised photos (pruned after 7 days or 300 files) | no |
 | `data/user_testset/` | Photos you saved as recognition test cases | no |
 | `data/benchmark/`, `data/eval/` | Benchmark and evaluation reports | no |

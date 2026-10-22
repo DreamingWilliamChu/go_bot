@@ -1,20 +1,24 @@
-"""Start the web server(s): main app, plus an HTTP helper for CA download in HTTPS mode."""
+"""Start the web server(s): main app, an HTTP helper for CA download in HTTPS mode, and with
+``--tunnel`` a loopback port for cloudflared plus the cloudflared process itself."""
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import atexit
 import contextlib
 import html
 import os
+import signal
 import sys
 
 import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
+from gobot.accounts import AccountStore
 from gobot.app import create_app
-from gobot.auth import load_or_create_token
+from gobot.auth import TunnelMarker, load_or_create_token
 from gobot.netinfo import lan_ip, local_hostname
 from gobot.settings import Settings
 
@@ -78,12 +82,46 @@ def banner(lines: list[str]) -> None:
     print("+" + "-" * (w - 2) + "+")
 
 
+def print_qr(url: str) -> None:
+    try:
+        import segno
+
+        segno.make(url, error="m").terminal(compact=True)
+    except Exception:  # pragma: no cover - cosmetic
+        pass
+
+
+def _tunnel_ready(url: str) -> None:
+    banner(
+        [
+            f"Remote access (Cloudflare tunnel):  {url}",
+            "Anyone with this address sees the sign-in page; only your username and password let them in.",
+        ]
+    )
+    print("Scan to open it on your phone (works on mobile data too):")
+    print_qr(url)
+    sys.stdout.flush()
+
+
 def serve(settings: Settings, args: argparse.Namespace) -> int:
     settings.lan = bool(args.lan)
     settings.https = bool(args.https)
     settings.port = int(args.port)
     settings.host = args.host or ("0.0.0.0" if settings.lan else "127.0.0.1")
     settings.require_token = settings.lan
+    settings.tunnel_port = int(getattr(args, "tunnel_port", 0) or settings.port + 1)
+    from gobot.tunnel import plan_tunnel
+
+    plan = plan_tunnel(
+        settings.root,
+        settings.data_dir,
+        flag=bool(getattr(args, "tunnel", False)),
+        no_tunnel=bool(getattr(args, "no_tunnel", False)),
+        hostname=getattr(args, "tunnel_hostname", None),
+    )
+    settings.tunnel = plan.enabled
+    tunnel_token, tunnel_host, shared_host = plan.token, plan.hostname, plan.shared_host
+    no_tunnel = bool(getattr(args, "no_tunnel", False))
     if args.model:
         settings.model = args.model
     if settings.host not in ("127.0.0.1", "localhost", "::1") and not settings.lan:
@@ -124,20 +162,43 @@ def serve(settings: Settings, args: argparse.Namespace) -> int:
                     f"First time on a phone? Open http://{ip}:{args.http_helper_port}/setup to trust the certificate."
                 )
         lines.append("Only devices with the pairing code can use the API. Keep this on trusted networks.")
-    else:
+    elif not settings.tunnel:
         lines.append("Localhost only. Use ./scripts/start.sh --lan to connect your phone.")
+    accounts = AccountStore(settings.account_json)
+    if settings.tunnel and tunnel_token:
+        lines += [
+            f"Remote access:  https://{tunnel_host}/  (your Cloudflare tunnel)"
+            if tunnel_host
+            else "Remote access: starting your named Cloudflare tunnel.",
+            f"Cloudflare must send that hostname to http://127.0.0.1:{settings.tunnel_port}",
+            "Run the app with this tunnel on one device at a time (Cloudflare splits traffic otherwise).",
+        ]
+    elif settings.tunnel:
+        lines.append("Remote access: starting a Cloudflare quick tunnel; its address is printed below.")
+    if shared_host and not tunnel_token and not no_tunnel:
+        lines += [
+            f"This repository is set up for remote access at https://{shared_host}/,",
+            "but this device has no tunnel token yet. Add it once with:  uv run gobot tunnel token",
+        ]
+    if settings.tunnel and not accounts.password_set:
+        lines += [
+            "NO SIGN-IN PASSWORD YET: nobody can sign in remotely until you set one.",
+            f"Set it on this Mac: {scheme}://localhost:{settings.port}/ > Engine > Account",
+            "(or run: uv run gobot account set)",
+        ]
     banner(lines)
     if pair_url:
-        try:
-            import segno
-
-            print("Scan with the iPhone camera:")
-            segno.make(pair_url, error="m").terminal(compact=True)
-        except Exception:  # pragma: no cover - cosmetic
-            pass
+        print("Scan with the iPhone camera:")
+        print_qr(pair_url)
     sys.stdout.flush()
 
-    app = create_app(settings, token=token, start_engine=not args.no_engine_warmup, pair_url=pair_url)
+    app = create_app(
+        settings,
+        token=token,
+        start_engine=not args.no_engine_warmup,
+        pair_url=pair_url,
+        accounts=accounts,
+    )
     main_cfg = uvicorn.Config(
         app,
         host=settings.host,
@@ -157,9 +218,45 @@ def serve(settings: Settings, args: argparse.Namespace) -> int:
         )
         servers.append(uvicorn.Server(helper_cfg))
 
+    tunnel = None
+    if settings.tunnel:
+        from gobot.tunnel import Tunnel
+
+        local = f"http://127.0.0.1:{settings.tunnel_port}"
+        tunnel = Tunnel(local, token=tunnel_token, hostname=tunnel_host, on_url=_tunnel_ready)
+        app.state.tunnel = tunnel
+        tunnel_cfg = uvicorn.Config(
+            TunnelMarker(app),  # type: ignore[arg-type]
+            host="127.0.0.1",  # only cloudflared on this Mac connects here
+            port=settings.tunnel_port,
+            log_level="info",
+            lifespan="off",  # the main server runs the app's startup/shutdown
+            proxy_headers=False,
+        )
+        servers.append(uvicorn.Server(tunnel_cfg))
+        if not tunnel.start():
+            print(f"Remote access is OFF: {tunnel.error}", file=sys.stderr)
+        elif tunnel.mode == "named" and not tunnel.url:
+            print("Named Cloudflare tunnel starting (run: uv run gobot tunnel setup --hostname <name>).")
+
     async def run_all() -> None:
         await asyncio.gather(*(s.serve() for s in servers))
 
-    with contextlib.suppress(KeyboardInterrupt):
-        asyncio.run(run_all())
+    if tunnel:
+        # uvicorn re-raises SIGTERM after its own shutdown, which would end the process before the
+        # `finally` below and leave cloudflared running. Turn SIGTERM/SIGHUP (closing the terminal)
+        # into a normal interrupt so the tunnel always stops with the server.
+        def _interrupt(signum: int, frame: object) -> None:
+            raise KeyboardInterrupt
+
+        for sig in (signal.SIGTERM, signal.SIGHUP):
+            signal.signal(sig, _interrupt)
+        atexit.register(tunnel.stop)
+
+    try:
+        with contextlib.suppress(KeyboardInterrupt):
+            asyncio.run(run_all())
+    finally:
+        if tunnel:
+            tunnel.stop()
     return 0
