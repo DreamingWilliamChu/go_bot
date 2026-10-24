@@ -32,7 +32,7 @@ describe('orientation transforms', () => {
   for (const flip of [false, true]) for (const rot of [0, 1, 2, 3] as const) orients.push({ rot, flip })
   it('toPhoto inverts toDisplay for all 8 orientations', () => {
     for (const o of orients)
-      for (const n of [9, 13, 19])
+      for (const n of [9, 11, 13, 19])
         for (let y = 0; y < n; y += 3)
           for (let x = 0; x < n; x += 2) expect(toPhoto(toDisplay([x, y], n, o), n, o)).toEqual([x, y])
   })

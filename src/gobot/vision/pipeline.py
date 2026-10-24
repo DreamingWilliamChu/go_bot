@@ -10,12 +10,14 @@ from __future__ import annotations
 import itertools
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
+from gobot.go.coords import SUPPORTED_SIZES
 from gobot.vision import board_detect, stones
 from gobot.vision.geometry import apply_h, grid_to_image_h, is_convex_quad, order_corners
 from gobot.vision.moku import MokuDetections, MokuDetector
@@ -25,6 +27,7 @@ log = logging.getLogger("gobot.vision")
 GRID_ACCEPT = 0.48  # see docs/RECOGNITION.md: no wrong grid scored above 0.42 in the test sets
 MANUAL_ACCEPT = 0.2  # manual corners are trusted unless the grid clearly does not match
 UNCERTAIN_CONF = 0.8
+SIZE_MARGIN = 0.01  # see docs/RECOGNITION.md: the right size never scored below another size in the test sets
 
 
 @dataclass
@@ -195,15 +198,36 @@ class Recognizer:
             res.messages.append(
                 f"{len(res.uncertain)} point(s) are marked '?' because the detectors were unsure."
             )
+        if corners is None:
+            t3 = time.perf_counter()
+            res.size_suggestion = self._suggest_size(rgb, n, accepted=True)
+            res.timings["size_check"] = time.perf_counter() - t3
+            if res.size_suggestion:
+                m = res.size_suggestion
+                res.messages.append(
+                    f"The photo fits a {m}×{m} grid better than {n}×{n}. Check the board size before confirming."
+                )
         res.timings["total"] = time.perf_counter() - t0
         return res
 
-    def _suggest_size(self, rgb: np.ndarray, n: int) -> int | None:
-        best_n, best = None, -9.0
-        for m in (9, 13, 19):
+    @staticmethod
+    def _size_scores(rgb: np.ndarray) -> dict[int, float]:
+        """Best automatic grid score at every supported size (sizes run in parallel)."""
+
+        def score(m: int) -> float:
             fits = board_detect.detect_grid(rgb, m, max_candidates=4)
-            if fits and fits[0].score > best:
-                best_n, best = m, fits[0].score
-        if best_n is not None and best_n != n and best >= GRID_ACCEPT:
-            return best_n
-        return None
+            return fits[0].score if fits else -9.0
+
+        with ThreadPoolExecutor(len(SUPPORTED_SIZES)) as ex:
+            return dict(zip(SUPPORTED_SIZES, ex.map(score, SUPPORTED_SIZES), strict=True))
+
+    def _suggest_size(self, rgb: np.ndarray, n: int, accepted: bool = False) -> int | None:
+        """Another size whose grid fits the photo, or None. Once a grid has been accepted at size n,
+        the other size must also beat n's own score (measured the same way) by SIZE_MARGIN."""
+        scores = self._size_scores(rgb)
+        best_n = max(scores, key=lambda m: scores[m])
+        if best_n == n or scores[best_n] < GRID_ACCEPT:
+            return None
+        if accepted and scores[best_n] < scores[n] + SIZE_MARGIN:
+            return None
+        return best_n

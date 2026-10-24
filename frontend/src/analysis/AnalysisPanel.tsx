@@ -28,6 +28,7 @@ interface Props {
   customSeconds: number
   showOwnership: boolean
   autoAnalyze: boolean
+  paused?: boolean // Erase is on: no analysis until it is turned off
   pvSel: PvSelection | null
   connection: string
   onPreset: (id: string) => void
@@ -95,7 +96,7 @@ export function AnalysisPanel(p: Props) {
               Stop
             </button>
           ) : (
-            <button class="btn primary" onClick={p.onAnalyze} data-testid="analyze">
+            <button class="btn primary" onClick={p.onAnalyze} disabled={p.paused} data-testid="analyze">
               Analyze
             </button>
           )}
@@ -103,11 +104,12 @@ export function AnalysisPanel(p: Props) {
             <input type="checkbox" checked={p.showOwnership} onChange={p.onToggleOwnership} /> Territory
           </label>
           <label class="toggle">
-            <input type="checkbox" checked={p.autoAnalyze} onChange={p.onToggleAuto} /> Auto
+            <input type="checkbox" checked={p.autoAnalyze} disabled={p.paused} onChange={p.onToggleAuto} /> Auto
           </label>
         </div>
       </div>
 
+      {p.paused ? <p class="note">Analysis paused while erasing stones.</p> : null}
       {p.connection !== 'open' ? (
         <p class="note warn">
           {p.connection === 'unauthorized'

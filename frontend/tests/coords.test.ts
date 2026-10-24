@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { gtpToXy, ownershipIndex, sgfToXy, xyToGtp, xyToSgf } from '../src/game/coords'
+import { gtpToXy, ownershipIndex, sgfToXy, starPoints, xyToGtp, xyToSgf } from '../src/game/coords'
 
 const fixture = JSON.parse(
   readFileSync(fileURLToPath(new URL('../../tests/fixtures/coords.json', import.meta.url)), 'utf8'),
@@ -29,8 +29,8 @@ describe('coordinates (shared fixture with Python)', () => {
       else expect(() => sgfToXy(p.sgf, p.size)).toThrow()
     }
   })
-  it('covers every point of 9/13/19 boards uniquely', () => {
-    for (const n of [9, 13, 19]) {
+  it('covers every point of 9/11/13/19 boards uniquely', () => {
+    for (const n of [9, 11, 13, 19]) {
       const seen = new Set<string>()
       for (let y = 0; y < n; y++)
         for (let x = 0; x < n; x++) {
@@ -42,5 +42,11 @@ describe('coordinates (shared fixture with Python)', () => {
         }
       expect(seen.size).toBe(n * n)
     }
+  })
+})
+
+describe('star points', () => {
+  it('puts the 11x11 corner dots on the 3-3 points', () => {
+    expect(starPoints(11).map(([x, y]) => xyToGtp(x, y, 11))).toEqual(['C9', 'J9', 'C3', 'J3', 'F6'])
   })
 })

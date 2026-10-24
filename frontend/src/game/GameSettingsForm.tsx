@@ -23,23 +23,6 @@ export function GameSettingsForm({ value, onChange, sizeLocked, idPrefix = 'gs' 
   return (
     <div class="game-settings">
       <fieldset class="field">
-        <legend>Board size</legend>
-        <div class="seg">
-          {SIZES.map((s) => (
-            <button
-              key={s}
-              type="button"
-              class={value.size === s ? 'on' : ''}
-              disabled={sizeLocked && value.size !== s}
-              aria-pressed={value.size === s}
-              onClick={() => onChange({ ...value, size: s })}
-            >
-              {s}×{s}
-            </button>
-          ))}
-        </div>
-      </fieldset>
-      <fieldset class="field">
         <legend>Next to play</legend>
         <div class="seg">
           {(['B', 'W'] as Color[]).map((c) => (
@@ -52,6 +35,23 @@ export function GameSettingsForm({ value, onChange, sizeLocked, idPrefix = 'gs' 
               onClick={() => onChange({ ...value, player: c })}
             >
               <span class={`dot ${c}`} /> {c === 'B' ? 'Black' : 'White'}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      <fieldset class="field">
+        <legend>Board size</legend>
+        <div class="seg">
+          {SIZES.map((s) => (
+            <button
+              key={s}
+              type="button"
+              class={value.size === s ? 'on' : ''}
+              disabled={sizeLocked && value.size !== s}
+              aria-pressed={value.size === s}
+              onClick={() => onChange({ ...value, size: s })}
+            >
+              {s}×{s}
             </button>
           ))}
         </div>

@@ -29,7 +29,7 @@ def test_invalid(coords_fixture):
                 sgf_to_xy(p["sgf"], p["size"])
 
 
-@pytest.mark.parametrize("n", [9, 13, 19])
+@pytest.mark.parametrize("n", [9, 11, 13, 19])
 def test_every_point_roundtrips(n):
     seen = set()
     for y in range(n):

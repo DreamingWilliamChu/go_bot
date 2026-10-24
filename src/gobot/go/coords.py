@@ -12,7 +12,7 @@ the BOTTOM, so the top-left point of a 19x19 board is "A19" and the bottom-right
 from __future__ import annotations
 
 GTP_COLUMNS = "ABCDEFGHJKLMNOPQRSTUVWXYZ"  # no "I"
-SUPPORTED_SIZES = (9, 13, 19)
+SUPPORTED_SIZES = (9, 11, 13, 19)
 PASS = "pass"
 
 

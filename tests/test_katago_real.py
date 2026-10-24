@@ -43,7 +43,7 @@ async def test_version_backend_and_model(svc):
 
 
 @needs_katago("b18c384-conv")
-@pytest.mark.parametrize("size", [9, 13, 19])
+@pytest.mark.parametrize("size", [9, 11, 13, 19])
 async def test_photo_position_initial_player(svc, size):
     c = size // 2
     pos = Position(
@@ -164,3 +164,28 @@ async def test_transformer_model_loads(tmp_settings):
         assert "transformer" in (s.manager.status()["modelDescription"] or "")
     finally:
         await s.manager.shutdown()
+
+
+@needs_katago("b18c384-conv")
+async def test_keep_color_lines_are_same_color_moves(svc):
+    # Black has just moved and plays again: KataGo must analyse for Black, with 3 Black moves per line.
+    pos = Position(size=9, moves=[Move(color="B", x=4, y=4)], to_play="B", rules="chinese", komi=7.5)
+    res = await run(svc, pos, AnalyzeParams(max_time=10, max_visits=200, same_color_moves=3))
+    final = res[-1]
+    assert final["type"] == "final"
+    assert final["currentPlayer"] == "B"
+    top = final["candidates"][0]
+    assert len(top["pv"]) == 3
+    assert {s["color"] for s in top["pv"]} == {"B"}
+    pts = {(s["x"], s["y"]) for s in top["pv"]}
+    assert len(pts) == 3 and (4, 4) not in pts
+
+
+@needs_katago("b18c384-conv")
+async def test_keep_color_after_own_pass(svc):
+    # Black passed, Black to play again: the inserted White pass makes two passes in a row.
+    pos = Position(size=9, moves=[Move(color="B", x=4, y=4), Move(color="B")], to_play="B", rules="chinese")
+    res = await run(svc, pos, AnalyzeParams(max_time=10, max_visits=50, same_color_moves=2))
+    final = res[-1]
+    assert final["currentPlayer"] == "B"
+    assert final["candidates"]

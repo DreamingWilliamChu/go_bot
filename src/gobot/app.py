@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -87,7 +88,7 @@ def create_app(
     async def status(request: Request) -> dict[str, Any]:
         svc: EngineService = request.app.state.engine
         return {
-            "app": {"version": __version__},
+            "app": {"version": __version__, "build": frontend_build(settings.frontend_dist)},
             "engine": svc.manager.status(),
             "hardware": {"summary": hardware.summary(svc.hardware), **svc.hardware},
             "presets": PRESETS,
@@ -297,6 +298,30 @@ NOT_BUILT = """<!doctype html><meta charset=utf-8><title>gobot</title>
 <body style="font-family:system-ui;max-width:40em;margin:3em auto;padding:0 1em">
 <h1>Frontend not built</h1><p>Run <code>npm --prefix frontend ci && npm --prefix frontend run build</code>
 (or <code>./scripts/setup_mac.sh</code>) and reload. The API is running.</p></body>"""
+
+
+_ENTRY_SCRIPT = re.compile(r'<script[^>]*\ssrc="(/assets/[^"]+\.js)"')
+_build_cache: dict[Path, tuple[float, str | None]] = {}
+
+
+def frontend_build(dist: Path) -> str | None:
+    """The built app's entry script (``/assets/index-<hash>.js``), or None when not built.
+
+    The app compares it with the script it was loaded from, so a page left open (an iPhone
+    home-screen app resumes without reloading) can tell that a newer build is being served.
+    """
+    index = dist / "index.html"
+    try:
+        mtime = index.stat().st_mtime
+    except OSError:
+        return None
+    cached = _build_cache.get(index)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    m = _ENTRY_SCRIPT.search(index.read_text(encoding="utf-8", errors="replace"))
+    build = m.group(1) if m else None
+    _build_cache[index] = (mtime, build)
+    return build
 
 
 def _mount_frontend(app: FastAPI, dist: Path) -> None:

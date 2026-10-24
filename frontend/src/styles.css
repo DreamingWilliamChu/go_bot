@@ -45,6 +45,8 @@ body {
   color: var(--text);
   font: 16px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans', system-ui, sans-serif;
   -webkit-text-size-adjust: 100%;
+  /* No double-tap zoom anywhere (quick taps on buttons and the board zoomed the page); pinch still zooms. */
+  touch-action: manipulation;
 }
 
 body {
@@ -111,11 +113,20 @@ h3 {
   background: radial-gradient(circle at 38% 38%, #111 30%, transparent 32%),
     radial-gradient(circle at 70% 66%, #fafaf5 26%, transparent 28%), var(--wood);
 }
-.tabs {
+/* Tabs plus the to-play pill: their own full-width row on phones, inline
+   after the brand on wider screens. The pill wraps below if it can't fit. */
+.nav-row {
   display: flex;
-  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
   order: 3;
   width: 100%;
+}
+.tabs {
+  display: flex;
+  flex: 1 1 11rem;
+  gap: 4px;
   background: color-mix(in srgb, var(--line) 55%, transparent);
   padding: 3px;
   border-radius: 10px;
@@ -161,11 +172,28 @@ h3 {
   }
 }
 
+.to-play {
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  white-space: nowrap;
+}
+/* the black stone needs an edge to show on the dark-mode pill */
+.to-play .dot.B {
+  border: 1px solid #888;
+}
+
 @media (min-width: 760px) {
-  .tabs {
+  .nav-row {
     order: 0;
     width: auto;
     margin-left: 12px;
+  }
+  .tabs {
+    flex: 0 1 auto;
   }
 }
 
@@ -253,6 +281,10 @@ svg.board .stone-w {
 }
 svg.board .pv {
   opacity: 0.92;
+}
+/* Keep color predictions: see-through stones, numbers stay solid. */
+svg.board .pv.ghost {
+  opacity: 0.5;
 }
 svg.board .pv-n-b,
 svg.board .pv-n-w {
@@ -368,6 +400,43 @@ svg.board .hl {
 .toolbar .btn {
   flex: 1 1 auto;
   min-width: 72px;
+}
+/* Undo / Pass / Redo: their own row, three equal large buttons. */
+.toolbar.moves {
+  flex-wrap: nowrap;
+  margin-bottom: 6px;
+}
+.toolbar.moves .btn {
+  flex: 1 1 0;
+  min-height: 52px;
+  font-size: 1.05rem;
+}
+/* Keep color: the colour of the stone it keeps playing (or would). */
+.btn.keep-color.B {
+  background: #111;
+  color: #fafaf5;
+  border-color: #666;
+}
+.btn.keep-color.W {
+  background: #fafaf5;
+  color: #111;
+  border-color: #888;
+}
+/* Keep color / Erase: while on, taps do something unusual, so it must be impossible to miss. */
+.btn.keep-color.on {
+  border: 2px solid #ffd84d;
+  box-shadow: 0 0 0 3px #ffd84d88;
+}
+.btn.erase.on {
+  background: #ffd84d;
+  color: #3d2e00;
+  border-color: #c99a00;
+  box-shadow: 0 0 0 2px #ffd84d66;
+}
+.to-play.keep {
+  background: #ffd84d;
+  color: #3d2e00;
+  border-color: #c99a00;
 }
 
 .seg {
@@ -698,6 +767,27 @@ svg.board .hl {
   font-size: 0.92rem;
 }
 
+/* A page left open on an old build (see OWN_BUILD in App.tsx). */
+.update-bar {
+  position: fixed;
+  left: 50%;
+  top: calc(8px + env(safe-area-inset-top));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--accent);
+  padding: 8px 8px 8px 14px;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  z-index: 20;
+  font-size: 0.92rem;
+}
+
 /* ---------------------------------------------------------------- photo */
 .photo-actions {
   display: grid;
@@ -804,7 +894,7 @@ video.live {
   max-width: 420px;
   margin: 0 auto;
 }
-.tabs[hidden] {
+.nav-row[hidden] {
   display: none;
 }
 .pairing input {

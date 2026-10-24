@@ -36,9 +36,10 @@ export interface Stone {
 }
 
 export interface MoveRec {
-  color: Color
+  color: Color // for an erase: the colour of the removed stone
   x: number | null // null = pass
   y: number | null
+  erase?: true // a stone taken off the board (not a move; the turn does not change)
 }
 
 export interface Setup {
@@ -109,6 +110,7 @@ function clearKo(b: GoBoard): GoBoard {
 
 export function applyMove(b: GoBoard, m: MoveRec): GoBoard {
   if (m.x === null || m.y === null) return clearKo(b)
+  if (m.erase) return clearKo(b.set([m.x, m.y], 0))
   return b.makeMove(sign(m.color), [m.x, m.y], {
     preventOverwrite: true,
     preventSuicide: true,
@@ -130,14 +132,19 @@ export function boardAt(g: GameState, moveCount: number): GoBoard {
 }
 
 export function nextPlayer(g: GameState): Color {
-  if (g.moves.length === 0) return g.setup.initialPlayer
-  return other(g.moves[g.moves.length - 1].color)
+  for (let i = g.moves.length - 1; i >= 0; i--) if (!g.moves[i].erase) return other(g.moves[i].color)
+  return g.setup.initialPlayer
+}
+
+/** Moves played (passes count, erases do not). */
+export function moveCount(g: GameState): number {
+  return g.moves.filter((m) => !m.erase).length
 }
 
 export type PlayResult = { ok: true; game: GameState } | { ok: false; reason: string }
 
-export function play(g: GameState, x: number, y: number): PlayResult {
-  const color = nextPlayer(g)
+/** `color` overrides whose turn it is, e.g. to place several stones of one colour in a row. */
+export function play(g: GameState, x: number, y: number, color: Color = nextPlayer(g)): PlayResult {
   const before = currentBoard(g)
   try {
     applyMove(before, { color, x, y })
@@ -154,9 +161,16 @@ export function play(g: GameState, x: number, y: number): PlayResult {
   }
 }
 
-export function pass(g: GameState): GameState {
-  const color = nextPlayer(g)
+export function pass(g: GameState, color: Color = nextPlayer(g)): GameState {
   return { ...g, moves: [...g.moves, { color, x: null, y: null }], redo: [], revision: g.revision + 1 }
+}
+
+/** Take one stone off the board, kept in the history so Undo puts it back. Null on an empty point. */
+export function eraseStone(g: GameState, x: number, y: number): GameState | null {
+  const s = currentBoard(g).get([x, y])
+  if (!s) return null
+  const rec: MoveRec = { color: s > 0 ? 'B' : 'W', x, y, erase: true }
+  return { ...g, moves: [...g.moves, rec], redo: [], revision: g.revision + 1 }
 }
 
 export function undo(g: GameState): GameState {
@@ -209,8 +223,12 @@ export function validKomi(k: number): boolean {
   return Number.isFinite(k) && Math.abs(k) <= 150 && Math.abs(k * 2 - Math.round(k * 2)) < 1e-9
 }
 
-/** Payload for the backend / KataGo. */
-export function toApiPosition(g: GameState) {
+/** Payload for the backend / KataGo. `toPlay` overrides alternation (Keep color).
+ *  KataGo's move list has no erases, so the history up to the last erase becomes the initial position. */
+export function toApiPosition(g: GameState, toPlay?: Color | null) {
+  let k = g.moves.length - 1
+  while (k >= 0 && !g.moves[k].erase) k--
+  if (k >= 0) g = { ...g, setup: collapseToSetup({ ...g, moves: g.moves.slice(0, k + 1) }), moves: g.moves.slice(k + 1) }
   return {
     size: g.setup.size,
     initial_stones: g.setup.initialStones.map((s) => ({ color: s.color, x: s.x, y: s.y })),
@@ -218,5 +236,6 @@ export function toApiPosition(g: GameState) {
     moves: g.moves.map((m) => ({ color: m.color, x: m.x, y: m.y })),
     rules: g.setup.rules,
     komi: g.setup.komi,
+    ...(toPlay ? { to_play: toPlay } : {}),
   }
 }

@@ -73,6 +73,7 @@ The low moku-v3 figure with labelled corners is largely label noise: several of 
 ### What this means
 
 - **The grid is never silently wrong.** No photo in any set was accepted with a grid more than half a cell off. Correct grids scored ≥ 0.53 and wrong ones ≤ 0.42 on 137 labelled photos, and the acceptance threshold is 0.48. The rest (about 5–7% of 19×19 photos, 7% of the oblique moku-v3 set) go to manual corner placement.
+- **A wrong board size is flagged, not trusted.** Neighbouring sizes can fit each other's grid well enough to pass the threshold (a 13×13 photo read as 11×11, or a 9×9 read as 19×19). After a grid is accepted, the app scores the photo at every size the same way and warns, with a one-tap retry, when another size fits better by at least 0.01. In the real sets the right size was never outscored, so there were no false warnings; the closest call was an empty 9×9 board that fit 11×11 only 0.015 worse. Of the wrong-size grids that would have been accepted, 112 of 116 were flagged (Tengen-Go 64/64, goban_data_set 48/52, on top of 15/15 synthetic). The four misses are 19×19 photos where automatic detection cannot find the true grid either. The check adds about 1 s per photo.
 - **On real 13×13 phone photos** with both detectors (Tengen-Go): 75% of boards are perfect, the average is 0.25 wrong points per board, and **every wrong point was flagged "?"** (0 silent errors). You should expect to check about 4 "?" points per photo.
 - **On very oblique, low-resolution photos** (moku-v3), expect 1–3 wrong points per 19×19 board, most of them flagged.
 - **moku-v4 helps** on every real set: more grids found, fewer errors, fewer silent errors. It is downloaded by default (`models/moku-v4.onnx`). Without it the app falls back to the classical detector alone.
@@ -80,6 +81,7 @@ The low moku-v3 figure with labelled corners is largely label noise: several of 
 ### Limitations (please read)
 
 - **Real 19×19 and 9×9 photos with full positions** are covered only by the low-resolution moku-v3 test split; real full-resolution 19×19 games are not covered. Tengen-Go is 13×13 and comes from a few physical setups; its 41 game frames come from one game and are correlated.
+- **11×11 is tested on synthetic photos only** (all 12 test renders perfect at the right size).
 - **moku-v3 test numbers may be optimistic for `classical+moku`.** moku-v4 was trained on data from the same sources (different photos), and the stone classifier's weights were fitted on the moku-v3 validation split.
 - **Not tested on iPhone photos or on the M1.** Timings above are from a 4-core x86 cloud VM. Use "Save as test case" on a few of your own photos and run `uv run gobot eval --sets user` on the Mac.
 - **Hard cases:** very low camera angles, glare on stones, a board the same colour as the table, stones pushed far off their intersections, and partial boards (all four corners must be visible). One photo cannot show captured stones, move order or a current ko.

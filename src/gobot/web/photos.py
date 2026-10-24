@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse
 from PIL import Image
 from pydantic import BaseModel, Field, field_validator
 
+from gobot.go.coords import SUPPORTED_SIZES
 from gobot.settings import Settings
 from gobot.vision.image_io import MAX_UPLOAD_BYTES, ImageError, load_image, to_jpeg
 from gobot.vision.pipeline import Recognizer
@@ -32,8 +33,8 @@ class RecognizeRequest(BaseModel):
     @field_validator("size")
     @classmethod
     def _size(cls, v: int) -> int:
-        if v not in (9, 13, 19):
-            raise ValueError("size must be 9, 13 or 19")
+        if v not in SUPPORTED_SIZES:
+            raise ValueError(f"size must be one of {SUPPORTED_SIZES}")
         return v
 
     @field_validator("corners")
@@ -165,7 +166,7 @@ def build_router(settings: Settings) -> tuple[APIRouter, Any]:
     async def save_testcase(pid: str, body: TestCaseRequest) -> dict[str, Any]:
         src = store.path(pid)
         n = body.size
-        if n not in (9, 13, 19) or len(body.board) != n or any(len(r) != n for r in body.board):
+        if n not in SUPPORTED_SIZES or len(body.board) != n or any(len(r) != n for r in body.board):
             raise HTTPException(422, "board does not match size")
         d = store.testset_dir / pid
         d.mkdir(parents=True, exist_ok=True)

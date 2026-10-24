@@ -57,11 +57,12 @@ def test_real_photos(recognizer, photo, labels, board, size):
     assert errors <= flagged  # any mistake must be visible to the user as '?'
 
 
-@pytest.mark.parametrize("seed,size", [(11, 9), (12, 13), (13, 19), (14, 19)])
+@pytest.mark.parametrize("seed,size", [(11, 9), (15, 11), (12, 13), (13, 19), (14, 19)])
 def test_synthetic_boards(recognizer, seed, size):
     rgb, truth, gc = synth_photo(seed, size)
     res = recognizer.recognize(rgb, size)
     assert res.status == "ok"
+    assert res.size_suggestion is None
     assert corner_error(np.array(res.corners), gc, size) < 0.3
     pred = np.array(res.board)
     flagged = np.zeros_like(pred, bool)
@@ -82,6 +83,16 @@ def test_wrong_size_is_not_accepted_and_suggests_size():
     assert res.status == "needs_corners"
     assert res.board is None  # never a guessed board
     assert res.size_suggestion == 13
+
+
+@pytest.mark.parametrize("seed,true_size,asked", [(104, 11, 13), (612, 9, 11), (709, 9, 19)])
+def test_accepted_wrong_size_suggests_size(seed, true_size, asked):
+    # Neighbouring sizes can fit each other's grids well enough to be accepted; the user must be told.
+    rgb, _, _ = synth_photo(seed, true_size)
+    res = Recognizer(None).recognize(rgb, asked)
+    assert res.status == "ok"
+    assert res.size_suggestion == true_size
+    assert any(f"{true_size}×{true_size}" in m for m in res.messages)
 
 
 def test_non_board_image_needs_corners():

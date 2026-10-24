@@ -501,7 +501,9 @@ class EngineManager:
                     continue
                 final = not item.get("isDuringSearch", False)
                 if self.is_current(client, qid):
-                    res = normalize_response(item, pos.size, top_n=top_n)
+                    res = normalize_response(
+                        item, pos.size, top_n=top_n, same_color_moves=params.same_color_moves
+                    )
                     res["type"] = "final" if final else "partial"
                     res["elapsed"] = round(loop.time() - started, 3)
                     res["cancelled"] = me.cancelled

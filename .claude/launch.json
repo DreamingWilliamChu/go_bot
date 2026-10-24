@@ -4,14 +4,65 @@
     {
       "name": "frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "frontend", "run", "dev", "--", "--port", "5173", "--strictPort"],
+      "runtimeArgs": [
+        "--prefix",
+        "frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5173",
+        "--strictPort"
+      ],
       "port": 5173
     },
     {
       "name": "backend",
       "runtimeExecutable": "./scripts/start.sh",
-      "runtimeArgs": ["--lan", "--tunnel"],
+      "runtimeArgs": [
+        "--lan",
+        "--tunnel"
+      ],
       "port": 8000
+    },
+    {
+      "name": "backend-local",
+      "runtimeExecutable": "./scripts/start.sh",
+      "runtimeArgs": [
+        "--no-tunnel"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "backend-test",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "GOBOT_FRONTEND_DIST=frontend/test-build/dist",
+        ".venv/bin/gobot",
+        "serve",
+        "--port",
+        "8010",
+        "--no-tunnel",
+        "--no-engine-warmup"
+      ],
+      "port": 8010
+    },
+    {
+      "name": "frontend-test",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "GOBOT_API=http://127.0.0.1:8010",
+        "npm",
+        "--prefix",
+        "frontend",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5174",
+        "--strictPort"
+      ],
+      "port": 5174
     }
   ]
 }

@@ -1,7 +1,9 @@
 // SGF import/export using @sabaki/sgf's parser/serializer.
-// Export: root holds SZ/KM/RU/PL and the initial position as AB/AW; the main line holds real moves.
-// Import: main line only. Setup properties after moves, or consecutive moves by the same colour,
-// collapse the history so far into a new initial position (reported as a warning).
+// Export: root holds SZ/KM/RU/PL and the initial position as AB/AW; the main line holds real moves,
+// and stones erased during the game as AE nodes.
+// Import: main line only. AE-only nodes after moves come back as erases. Other setup properties
+// after moves, or consecutive moves by the same colour, collapse the history so far into a new
+// initial position (reported as a warning).
 
 import { parse, stringify, type SgfNode } from '@sabaki/sgf'
 import { SIZES, type BoardSize, sgfToXy, xyToSgf } from './coords'
@@ -12,6 +14,7 @@ import {
   type Setup,
   type Stone,
   collapseToSetup,
+  eraseStone,
   fromSetup,
   nextPlayer,
   pass as passMove,
@@ -75,7 +78,7 @@ export function exportSgf(g: GameState, comment?: string): string {
   let cur = rootNode
   for (const m of g.moves) {
     const v = m.x === null || m.y === null ? '' : xyToSgf(m.x, m.y, n)
-    const child = node({ [m.color]: [v] })
+    const child = node(m.erase ? { AE: [v] } : { [m.color]: [v] })
     child.parentId = cur.id
     cur.children = [child]
     cur = child
@@ -122,7 +125,7 @@ export function importSgf(text: string, defaults: { rules: Rules; komi: number }
   if (szRaw.includes(':')) throw new Error('Rectangular boards are not supported.')
   const size = parseInt(szRaw, 10)
   if (!(SIZES as readonly number[]).includes(size))
-    throw new Error(`Board size ${szRaw} is not supported (use 9, 13 or 19).`)
+    throw new Error(`Board size ${szRaw} is not supported (use ${SIZES.slice(0, -1).join(', ')} or ${SIZES[SIZES.length - 1]}).`)
   let rules = rulesFromSgf(d.RU?.[0])
   if (!rules) {
     if (d.RU?.[0]) warnings.push(`Unknown rules "${d.RU[0]}"; using ${defaults.rules}.`)
@@ -151,7 +154,10 @@ export function importSgf(text: string, defaults: { rules: Rules; komi: number }
   for (let cur: SgfNode | undefined = root; cur; cur = cur.children[0]) {
     const nd = cur.data
     const hasSetup = nd.AB || nd.AW || nd.AE
-    if (hasSetup) {
+    if (nd.AE && !nd.AB && !nd.AW && game.moves.length) {
+      // Stones taken off during the game: kept as erases, so the moves before stay.
+      for (const [x, y] of expandPoints(nd.AE, size)) game = eraseStone(game, x, y) ?? game
+    } else if (hasSetup) {
       if (game.moves.length) {
         warnings.push(`Setup stones after move ${moveNo}: earlier moves were folded into the starting position.`)
         setup = collapseToSetup(game, 'sgf')

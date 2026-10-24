@@ -71,6 +71,9 @@ class Position(BaseModel):
     moves: list[Move] = Field(default_factory=list)
     rules: Rules = "chinese"
     komi: float = 7.5
+    # Who moves next, when it isn't simply the other colour of the last move ("Keep color" mode:
+    # one colour plays several moves in a row).
+    to_play: Color | None = None
 
     @field_validator("size")
     @classmethod
@@ -109,6 +112,9 @@ class Position(BaseModel):
             return self.initial_player
         return "W" if self.moves[-1].color == "B" else "B"
 
+    def player(self) -> Color:
+        return self.to_play or self.next_player()
+
 
 class AnalyzeParams(BaseModel):
     max_time: float = Field(default=6.0, gt=0, le=MAX_THINK_SECONDS)
@@ -116,6 +122,8 @@ class AnalyzeParams(BaseModel):
     include_ownership: bool = True
     pv_len: int = Field(default=15, ge=1, le=40)
     report_every: float = Field(default=0.5, ge=0.1, le=10)
+    # >1: analyse that many moves in a row by the player to move (the opponent may only pass).
+    same_color_moves: int = Field(default=1, ge=1, le=10)
 
 
 def build_query(qid: str, pos: Position, params: AnalyzeParams) -> dict[str, Any]:
@@ -126,25 +134,35 @@ def build_query(qid: str, pos: Position, params: AnalyzeParams) -> dict[str, Any
     captures, ko and superko from that point on.
     """
     n = pos.size
+    moves = [
+        [m.color, "pass" if m.is_pass else xy_to_gtp(m.x, m.y, n)]  # type: ignore[arg-type]
+        for m in pos.moves
+    ]
+    player = pos.player()
+    if player != pos.next_player():
+        # KataGo always gives the turn to the other colour of the last move, so let that colour pass.
+        moves.append([_other(player), "pass"])
     q: dict[str, Any] = {
         "id": qid,
         "initialStones": [[s.color, xy_to_gtp(s.x, s.y, n)] for s in pos.initial_stones],
         "initialPlayer": pos.initial_player,
-        "moves": [
-            [m.color, "pass" if m.is_pass else xy_to_gtp(m.x, m.y, n)]  # type: ignore[arg-type]
-            for m in pos.moves
-        ],
+        "moves": moves,
         "rules": pos.rules,
         "komi": pos.komi,
         "boardXSize": n,
         "boardYSize": n,
         "includeOwnership": params.include_ownership,
         "includePVVisits": True,
-        "analysisPVLen": params.pv_len,
+        "analysisPVLen": max(params.pv_len, 2 * params.same_color_moves - 1),
         "maxVisits": params.max_visits or UNLIMITED_VISITS,
         "overrideSettings": {"maxTime": params.max_time},
         "reportDuringSearchEvery": params.report_every,
     }
+    k = params.same_color_moves
+    if k > 1:
+        # The opponent's replies to the first k-1 moves (plies 1, 3, .., 2k-3) can only be passes,
+        # so the search and its lines are k moves in a row by `player`.
+        q["allowMoves"] = [{"player": _other(player), "moves": ["pass"], "untilDepth": 2 * k - 2}]
     return q
 
 
@@ -159,11 +177,16 @@ def _other(c: str) -> str:
     return "W" if c == "B" else "B"
 
 
-def normalize_response(raw: dict[str, Any], size: int, *, top_n: int | None = None) -> dict[str, Any]:
+def normalize_response(
+    raw: dict[str, Any], size: int, *, top_n: int | None = None, same_color_moves: int = 1
+) -> dict[str, Any]:
     """Convert a KataGo analysis response into the app's JSON shape.
 
     All winrates/score leads are from BLACK's perspective (``reportAnalysisWinratesAs = BLACK``).
     Field names say so explicitly (``blackWinrate``, ``blackScoreLead``).
+
+    With ``same_color_moves`` > 1 (see ``build_query``) each line keeps only the player's own
+    moves, without the opponent's forced passes, and stops after that many moves.
     """
     out: dict[str, Any] = {
         "id": raw.get("id"),
@@ -202,6 +225,15 @@ def normalize_response(raw: dict[str, Any], size: int, *, top_n: int | None = No
                 step["visits"] = int(pv_visits[i])
             pv.append(step)
             color = _other(color)
+        if same_color_moves > 1:
+            own = []
+            for i, step in enumerate(pv[: 2 * same_color_moves - 1]):
+                if i % 2:
+                    if not step["pass"]:
+                        break
+                else:
+                    own.append(step)
+            pv = own
         cands.append(
             {
                 **v,

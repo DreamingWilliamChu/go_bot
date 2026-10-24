@@ -11,4 +11,9 @@ cd "$(dirname "$0")/.."
 if [ ! -f frontend/dist/index.html ]; then
   echo "The web app is not built yet. Run ./scripts/setup_mac.sh first."; exit 1
 fi
+# Sources changed since the last build: build again, so the server never serves an old app.
+if [ -n "$(find frontend/src frontend/index.html frontend/public -newer frontend/dist/index.html -print -quit 2>/dev/null)" ]; then
+  echo "The web app changed since it was built; building it again..."
+  npm --prefix frontend run build
+fi
 exec uv run --frozen gobot serve "$@"

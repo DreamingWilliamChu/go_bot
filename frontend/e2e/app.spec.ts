@@ -50,15 +50,47 @@ test('SGF export and import round trip', async ({ page }) => {
   await tapPoint(page, 0, 19, 16, 3)
   await tapPoint(page, 0, 19, 2, 15)
   await page.getByTestId('pass').click()
+  // Save / Open SGF live on the Edit position page; an untouched draft saves the moves
+  await page.getByTestId('edit-position').click()
   const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Save SGF' }).click()])
   const path = await dl.path()
   const sgf = readFileSync(path!, 'utf8')
   expect(sgf).toContain(';B[qd]')
   expect(sgf).toContain(';W[cp]')
   expect(sgf).toContain(';B[]')
+  await page.getByRole('button', { name: 'Cancel' }).click()
   await page.getByRole('button', { name: 'Undo' }).click()
+  await page.getByTestId('edit-position').click()
   await page.locator('input[type=file][accept*=".sgf"]').setInputFiles({ name: 'g.sgf', mimeType: 'application/x-go-sgf', buffer: Buffer.from(sgf) })
   await expect(page.getByText('Move 3')).toBeVisible()
+})
+
+test('erase: tap stones off, undo brings them back, analysis pauses and resumes', async ({ page }) => {
+  const auto = page.getByRole('checkbox', { name: 'Auto' })
+  await auto.uncheck()
+  await tapPoint(page, 0, 19, 16, 3)
+  await tapPoint(page, 0, 19, 2, 15)
+  await expect(page.getByText('Move 2')).toBeVisible()
+  const stones = page.locator('svg.board').first().locator('circle.stone-b, circle.stone-w')
+  const before = await stones.count()
+  const erase = page.getByTestId('erase')
+  await erase.click()
+  await expect(erase).toHaveAttribute('aria-pressed', 'true')
+  await expect(auto).toBeDisabled()
+  await tapPoint(page, 0, 19, 16, 3)
+  await expect(stones).toHaveCount(before - 1)
+  await expect(page.getByText('Move 2')).toBeVisible() // an erase is not a move
+  await page.getByRole('button', { name: 'Undo' }).click()
+  await expect(stones).toHaveCount(before)
+  await erase.click()
+  await expect(erase).toHaveAttribute('aria-pressed', 'false')
+  await expect(auto).not.toBeChecked() // was off before: stays off
+  // Auto on before erasing: unchecked while erasing, back on afterwards
+  await auto.check()
+  await erase.click()
+  await expect(auto).not.toBeChecked()
+  await erase.click()
+  await expect(auto).toBeChecked()
 })
 
 test('photo: upload, review, correct, choose player, confirm, analyse', async ({ page }) => {

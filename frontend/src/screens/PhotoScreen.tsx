@@ -1,8 +1,10 @@
 import { useMemo, useRef, useState } from 'preact/hooks'
 import { api, type StatusResponse } from '../api/client'
+import { colorName, leadText } from '../analysis/format'
 import { BoardView, type Sign } from '../board/BoardView'
 import { SIZES, type BoardSize } from '../game/coords'
-import { type Color, type Rules, type Setup, deadGroupsInSetup } from '../game/game'
+import { countSettled } from '../game/count'
+import { type Color, RULES, type Rules, type Setup, deadGroupsInSetup } from '../game/game'
 import { GameSettingsForm } from '../game/GameSettingsForm'
 import { CornerEditor } from '../photo/CornerEditor'
 import { defaultCorners, isConvex, type Pt } from '../photo/homography'
@@ -145,6 +147,10 @@ export function PhotoScreen({ defaults, status, toast, onConfirmed }: Props) {
     for (const s of setupDraft?.initialStones ?? []) s.color === 'B' ? b++ : w++
     return { b, w }
   }, [setupDraft])
+  const settled = useMemo(
+    () => (setupDraft ? countSettled(setupDraft.initialStones, setupDraft.size, rules, komi) : null),
+    [setupDraft, rules, komi],
+  )
 
   function tapPoint(dx: number, dy: number) {
     if (!board) return
@@ -294,6 +300,23 @@ export function PhotoScreen({ defaults, status, toast, onConfirmed }: Props) {
     )
   }
 
+  const sizeHint =
+    rec?.sizeSuggestion && photo ? (
+      <p class="note small" data-testid="size-suggestion">
+        The photo looks more like a {rec.sizeSuggestion}×{rec.sizeSuggestion} board.{' '}
+        <button
+          class="linkish"
+          onClick={() => {
+            const s = rec.sizeSuggestion as BoardSize
+            setSize(s)
+            void recognize(photo, s, null)
+          }}
+        >
+          Try {rec.sizeSuggestion}×{rec.sizeSuggestion}
+        </button>
+      </p>
+    ) : null
+
   if (step === 'corners' && photo) {
     return (
       <div class="screen photo-screen">
@@ -311,21 +334,7 @@ export function PhotoScreen({ defaults, status, toast, onConfirmed }: Props) {
               {m}
             </p>
           ))}
-          {rec?.sizeSuggestion ? (
-            <p class="note small">
-              The photo looks more like a {rec.sizeSuggestion}×{rec.sizeSuggestion} board.{' '}
-              <button
-                class="linkish"
-                onClick={() => {
-                  const s = rec.sizeSuggestion as BoardSize
-                  setSize(s)
-                  void recognize(photo, s, null)
-                }}
-              >
-                Try {rec.sizeSuggestion}×{rec.sizeSuggestion}
-              </button>
-            </p>
-          ) : null}
+          {sizeHint}
           <p class="small">
             Drag the four red handles onto the <b>outermost line crossings</b> of the {size}×{size} grid. The blue grid
             should then lie on the board lines.
@@ -387,6 +396,7 @@ export function PhotoScreen({ defaults, status, toast, onConfirmed }: Props) {
               {m}
             </p>
           ))}
+          {sizeHint}
           <p class="small">
             Tap a point to cycle <b>black → white → empty</b>. Points marked <b>?</b> need a look.
           </p>
@@ -395,6 +405,7 @@ export function PhotoScreen({ defaults, status, toast, onConfirmed }: Props) {
             signMap={displayBoard}
             uncertain={displayUncertain}
             highlight={deadSet}
+            ownership={settled?.owner}
             onPoint={tapPoint}
             ariaLabel="Reconstructed position"
           />
@@ -440,6 +451,7 @@ export function PhotoScreen({ defaults, status, toast, onConfirmed }: Props) {
               {counts.b === counts.w ? ' – usually Black to play' : counts.b === counts.w + 1 ? ' – usually White to play' : ''}.)
             </p>
           ) : null}
+          {settled ? <SettledCountBox count={settled} rules={rules} /> : null}
           <p class="muted tiny">
             One photo cannot show earlier moves, captures or a ko that is currently forbidden. KataGo will analyse this
             as a fresh position; moves you enter afterwards are kept.
@@ -462,6 +474,30 @@ export function PhotoScreen({ defaults, status, toast, onConfirmed }: Props) {
     <div class="screen">
       {fileInputs}
       <p>Loading… {status ? '' : '(not connected)'}</p>
+    </div>
+  )
+}
+
+function SettledCountBox({ count, rules }: { count: ReturnType<typeof countSettled>; rules: Rules }) {
+  const { black, white, komi, lead } = count
+  const even = Math.abs(lead) < 0.05
+  const winner = lead > 0 ? 'B' : 'W'
+  const whiteTotal = white.total + komi
+  const label = (RULES.find((r) => r.id === rules)?.label ?? rules).replace(/ \(.*\)$/, '') // "Chinese (area)" → "Chinese"
+  return (
+    <div class="note small" data-testid="settled-count">
+      <b>Count now:</b> Black {black.total} · White {white.total}
+      {komi ? ` ${komi < 0 ? '−' : '+'} ${Math.abs(komi)} komi = ${whiteTotal}` : ''} · {leadText(lead)}
+      {even ? ' → a draw on this count' : ` → ${colorName(winner)} wins on this count`}
+      <div class="muted tiny" style={{ marginTop: '4px' }}>
+        {count.method === 'area'
+          ? `Area count (${label}): stones on the board + empty points surrounded by one colour.`
+          : count.method === 'territory'
+            ? `Territory count (${label}): empty points surrounded by one colour. Captures before the photo aren't known and count as 0.`
+            : `Stone scoring: stones on the board only.`}{' '}
+        Dead stones and unsettled areas aren't counted, so mid-game many points count for nobody.
+        {count.method === 'stones' ? '' : ' Shaded points on the board are the settled ones.'}
+      </div>
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fromSetup, newGame, nextPlayer, pass, play, type GameState } from '../src/game/game'
+import { currentBoard, eraseStone, fromSetup, newGame, nextPlayer, pass, play, type GameState } from '../src/game/game'
 import { exportSgf, importSgf } from '../src/game/sgf'
 
 function mustPlay(g: GameState, x: number, y: number): GameState {
@@ -74,7 +74,7 @@ describe('SGF', () => {
   it('expands compressed point lists and rejects bad files', () => {
     const { game } = importSgf('(;SZ[9]AB[aa:bb])', D)
     expect(game.setup.initialStones.length).toBe(4)
-    expect(() => importSgf('(;SZ[15])', D)).toThrow(/not supported/)
+    expect(() => importSgf('(;SZ[15])', D)).toThrow(/use 9, 11, 13 or 19/)
     expect(() => importSgf('(;GM[2]SZ[9])', D)).toThrow(/not a Go game/)
     expect(() => importSgf('(;SZ[9];B[aa];W[aa])', D)).toThrow(/Illegal move 2/)
   })
@@ -86,11 +86,31 @@ describe('SGF', () => {
     expect(game.setup.initialStones.length).toBe(3)
   })
 
+  it('round-trips erased stones as AE nodes, keeping the moves', () => {
+    let g = mustPlay(newGame(9), 4, 4)
+    g = mustPlay(g, 2, 2)
+    g = eraseStone(g, 4, 4)!
+    g = mustPlay(g, 6, 6)
+    const t = exportSgf(g)
+    expect(t).toContain(';AE[ee]')
+    const { game, warnings } = importSgf(t, D)
+    expect(warnings).toEqual([])
+    expect(game.moves).toEqual(g.moves)
+    expect(currentBoard(game).signMap).toEqual(currentBoard(g).signMap)
+  })
+
   it('unknown rules and bad komi fall back with warnings', () => {
     const { game, warnings } = importSgf('(;SZ[9]RU[Weird]KM[7.3])', D)
     expect(game.setup.rules).toBe('chinese')
     expect(game.setup.komi).toBe(7.5)
     expect(warnings.length).toBe(2)
+  })
+
+  it('imports 11x11 games', () => {
+    const { game } = importSgf('(;GM[1]SZ[11];B[ff];W[dd];B[kk])', D)
+    expect(game.setup.size).toBe(11)
+    expect(game.moves.length).toBe(3)
+    expect(importSgf(exportSgf(game), D).game.moves.length).toBe(3)
   })
 
   it('empty game exports minimal SGF', () => {

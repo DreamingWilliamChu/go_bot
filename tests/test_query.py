@@ -53,6 +53,9 @@ def test_ok_komi_values():
 def test_bad_size_and_points():
     with pytest.raises(ValidationError):
         Position(size=15)
+    assert Position(size=11, initial_stones=[Stone(color="B", x=10, y=10)]).size == 11
+    with pytest.raises(ValidationError):
+        Position(size=11, initial_stones=[Stone(color="B", x=11, y=0)])
     with pytest.raises(ValidationError):
         Position(size=9, initial_stones=[Stone(color="B", x=9, y=0)])
     with pytest.raises(ValidationError):
@@ -144,3 +147,44 @@ def test_normalize_top_n_and_bad_ownership():
 def test_normalize_terminated_without_results():
     r = normalize_response({"id": "x", "isDuringSearch": False, "noResults": True, "turnNumber": 0}, 9)
     assert r["noResults"] and r["candidates"] == []
+
+
+def test_keep_color_query_inserts_pass_and_restricts_opponent():
+    pos = photo_position(initial_player="B", moves=[Move(color="B", x=3, y=3)], to_play="B")
+    q = build_query("x", pos, AnalyzeParams(same_color_moves=3, pv_len=2))
+    assert q["moves"] == [["B", "D16"], ["W", "pass"]]
+    assert q["allowMoves"] == [{"player": "W", "moves": ["pass"], "untilDepth": 4}]
+    assert q["analysisPVLen"] == 5
+    # Already Black's turn: nothing inserted; one move per line means no restriction.
+    q = build_query("x", photo_position(initial_player="B", to_play="B"), AnalyzeParams())
+    assert q["moves"] == [] and "allowMoves" not in q
+
+
+def test_normalize_keep_color_drops_forced_passes():
+    raw = {
+        "id": "x",
+        "isDuringSearch": False,
+        "rootInfo": {"currentPlayer": "B", "visits": 10, "winrate": 0.6, "scoreLead": 2.0},
+        "moveInfos": [
+            {
+                "move": "D4",
+                "order": 0,
+                "visits": 9,
+                "winrate": 0.6,
+                "scoreLead": 2.0,
+                "pv": ["D4", "pass", "Q16", "pass", "Q4", "D16"],
+            },
+            {
+                "move": "C3",
+                "order": 1,
+                "visits": 1,
+                "winrate": 0.5,
+                "scoreLead": 1.0,
+                "pv": ["C3", "Q16", "Q4"],
+            },  # not a same-colour line: cut at the first real reply
+        ],
+    }
+    r = normalize_response(raw, 19, same_color_moves=3)
+    assert [s["gtp"] for s in r["candidates"][0]["pv"]] == ["D4", "Q16", "Q4"]
+    assert {s["color"] for s in r["candidates"][0]["pv"]} == {"B"}
+    assert [s["gtp"] for s in r["candidates"][1]["pv"]] == ["C3"]

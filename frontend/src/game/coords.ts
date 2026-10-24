@@ -4,7 +4,7 @@
 // Kept in lock-step with src/gobot/go/coords.py (both are tested against tests/fixtures/coords.json).
 
 export const GTP_COLUMNS = 'ABCDEFGHJKLMNOPQRSTUVWXYZ'
-export const SIZES = [9, 13, 19] as const
+export const SIZES = [9, 11, 13, 19] as const
 export type BoardSize = (typeof SIZES)[number]
 
 export function inBounds(x: number, y: number, size: number): boolean {
@@ -59,6 +59,7 @@ export function starPoints(size: number): [number, number][] {
   if (size === 19)
     return [3, 9, 15].flatMap((x) => [3, 9, 15].map((y) => [x, y] as [number, number]))
   if (size === 13) return [[3, 3], [9, 3], [3, 9], [9, 9], [6, 6]]
+  if (size === 11) return [[2, 2], [8, 2], [2, 8], [8, 8], [5, 5]] // C9, J9, C3, J3, F6
   if (size === 9) return [[2, 2], [6, 2], [2, 6], [6, 6], [4, 4]]
   return []
 }

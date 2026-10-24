@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from fastapi.testclient import TestClient
 
 from gobot.app import create_app
@@ -23,6 +25,7 @@ def test_status_and_frontend_fallback(tmp_settings, tmp_path):
         assert [p["id"] for p in body["presets"]] == ["quick", "standard", "deep"]
         assert "chinese" in body["rules"]
         assert "Frontend not built" in c.get("/").text
+        assert body["app"]["build"] is None
         assert c.get("/api/nope").status_code == 404
 
 
@@ -38,6 +41,20 @@ def test_frontend_served_with_spa_fallback(tmp_settings, tmp_path):
         r = c.get("/assets/a.js")
         assert r.text == "x" and "immutable" in r.headers["cache-control"]
         assert c.get("/../pyproject.toml").text == "<html>app</html>"
+
+
+def test_status_reports_frontend_build(tmp_settings, tmp_path):
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    index = dist / "index.html"
+    index.write_text('<script type="module" crossorigin src="/assets/index-AAA.js"></script>')
+    tmp_settings.frontend_dist = dist
+    with client_for(tmp_settings) as c:
+        assert c.get("/api/status").json()["app"]["build"] == "/assets/index-AAA.js"
+        # Rebuilt while the server runs: the new build is reported without a restart.
+        index.write_text('<script type="module" crossorigin src="/assets/index-BBB.js"></script>')
+        os.utime(index, (1, 1))
+        assert c.get("/api/status").json()["app"]["build"] == "/assets/index-BBB.js"
 
 
 def test_lan_auth_requires_pairing(tmp_settings):

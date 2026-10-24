@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { AnalysisSocket, type AnalysisResult, type SocketMessage, type SocketState } from '../api/client'
-import { type GameState, toApiPosition } from '../game/game'
+import { type Color, type GameState, toApiPosition } from '../game/game'
 import type { AnalysisStatus } from './AnalysisPanel'
 
 /**
@@ -58,7 +58,8 @@ export function useAnalysis(onFinished?: () => void) {
     return () => s.close()
   }, [])
 
-  const start = useCallback((game: GameState, seconds: number) => {
+  /** `keep`: one colour plays `moves` moves in a row (Keep color); KataGo's lines are those moves. */
+  const start = useCallback((game: GameState, seconds: number, keep?: { color: Color; moves: number } | null) => {
     const requestId = `r${++seq.current}-${Date.now() % 100000}`
     current.current = { requestId, revision: game.revision }
     setResult(null)
@@ -66,11 +67,12 @@ export function useAnalysis(onFinished?: () => void) {
     setError(null)
     setWarning(null)
     setStatus('running')
-    sock.current?.analyze(requestId, toApiPosition(game), {
+    sock.current?.analyze(requestId, toApiPosition(game, keep?.color), {
       max_time: seconds,
       include_ownership: true,
       report_every: 0.5,
       pv_len: 20,
+      same_color_moves: keep ? keep.moves : 1,
     })
   }, [])
 

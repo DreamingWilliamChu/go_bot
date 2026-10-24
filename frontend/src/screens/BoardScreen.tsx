@@ -13,7 +13,9 @@ import {
   collapseToSetup,
   currentBoard,
   deadGroupsInSetup,
+  eraseStone,
   fromSetup,
+  moveCount,
   newGame,
   nextPlayer,
   pass,
@@ -23,6 +25,7 @@ import {
   sign,
   undo,
 } from '../game/game'
+import type { KeepRound, Point } from '../game/keepRound'
 import { exportSgf, importSgf } from '../game/sgf'
 
 type Palette = 'B' | 'W' | 'erase' | 'cycle'
@@ -39,6 +42,14 @@ export interface AnalysisBundle {
 interface Props {
   game: GameState
   setGame: (g: GameState) => void
+  keepColor: Color | null
+  setKeepColor: (c: Color | null) => void
+  prepareKeep: (c: Color | null, moves: number) => void
+  keepRound: KeepRound
+  advanceKeep: (shown: Point[], played: Point | null) => void
+  keepMoves: number
+  erasing: boolean
+  setErasing: (on: boolean, resume?: boolean) => void
   analysis: AnalysisBundle
   engine: EngineStatus | null
   presets: Preset[]
@@ -60,52 +71,82 @@ function signMapOf(b: GoBoard): Sign[][] {
 }
 
 export function BoardScreen(p: Props) {
-  const { game, setGame } = p
+  const { game, setGame, keepColor, setKeepColor, prepareKeep } = p
   const [mode, setMode] = useState<'play' | 'setup'>('play')
   const [palette, setPalette] = useState<Palette>('cycle')
   const [draft, setDraft] = useState<Setup | null>(null)
   const [pvSel, setPvSel] = useState<PvSelection | null>(null)
+  const [draftKeepMoves, setDraftKeepMoves] = useState(p.keepMoves)
   const fileRef = useRef<HTMLInputElement>(null)
+  const draftBase = useRef<Setup | null>(null) // the draft as Edit position opened it
 
   const board = useMemo(() => currentBoard(game), [game])
-  const toMove = nextPlayer(game)
+  const toMove = keepColor ?? nextPlayer(game)
   const caps = useMemo(() => captures(game), [game])
+  // The last move played (not an erase), while its stone is still there.
   const lastMove = useMemo(() => {
-    const m = game.moves[game.moves.length - 1]
-    return m && m.x !== null && m.y !== null ? ([m.x, m.y] as [number, number]) : null
-  }, [game])
+    const m = [...game.moves].reverse().find((r) => !r.erase)
+    if (!m || m.x === null || m.y === null) return null
+    return board.get([m.x, m.y]) === sign(m.color) ? ([m.x, m.y] as [number, number]) : null
+  }, [game, board])
 
   // Only show analysis that belongs to this exact position.
   const result = p.analysis.forRevision === game.revision ? p.analysis.result : null
   const resultPv = pvSel && result ? result.candidates[pvSel.cand] : null
+  // Keep color: predictions for the moves left in this round. Ones kept from before stay where
+  // they were (unless filled since); otherwise the best line of the latest analysis.
+  const prediction: Point[] | null = useMemo(() => {
+    if (!keepColor || mode !== 'play' || p.erasing) return null
+    const frozen = p.keepRound.frozen?.filter((q) => board.get([q.x, q.y]) === 0)
+    if (frozen?.length) return frozen
+    const top = result?.candidates[0]
+    if (!top) return null
+    return top.pv
+      .slice(0, p.keepMoves - p.keepRound.done)
+      .flatMap((s) => (s.pass || s.x === null || s.y === null ? [] : [{ x: s.x, y: s.y }]))
+  }, [keepColor, mode, p.erasing, p.keepRound, p.keepMoves, board, result])
+
+  // What the board draws on top of the position: a chosen line, else the Keep color predictions
+  // (see-through, numbered by their place in the round).
+  const line = useMemo(() => {
+    if (resultPv && pvSel) return { steps: resultPv.pv.slice(0, pvSel.step), first: 1, ghost: false }
+    if (prediction && keepColor)
+      return {
+        steps: prediction.map((q) => ({ ...q, color: keepColor, pass: false })),
+        first: p.keepRound.done + 1,
+        ghost: true,
+      }
+    return null
+  }, [resultPv, pvSel, prediction, keepColor, p.keepRound.done])
 
   const view = useMemo(() => {
     if (mode === 'setup' && draft) {
       const g = fromSetup(draft)
       return { signMap: signMapOf(currentBoard(g)), pv: [] as PvMark[] }
     }
-    if (resultPv && pvSel) {
+    if (line) {
       let b = board
       const placed: PvMark[] = []
-      resultPv.pv.slice(0, pvSel.step).forEach((s, i) => {
+      line.steps.forEach((s, i) => {
         if (s.pass || s.x === null || s.y === null) return
         try {
           b = b.makeMove(sign(s.color), [s.x, s.y])
         } catch {
           return
         }
-        placed.push({ x: s.x, y: s.y, color: s.color, n: i + 1 })
+        placed.push({ x: s.x, y: s.y, color: s.color, n: line.first + i, ghost: line.ghost })
       })
       const sm = signMapOf(b)
       // drop numbers of PV stones that were captured later in the line
       const pv = placed.filter((m) => sm[m.y][m.x] === (m.color === 'B' ? 1 : -1))
-      return { signMap: sm, pv }
+      // predictions are drawn see-through over the position as it is
+      return { signMap: line.ghost ? signMapOf(board) : sm, pv }
     }
     return { signMap: signMapOf(board), pv: [] as PvMark[] }
-  }, [mode, draft, board, resultPv, pvSel])
+  }, [mode, draft, board, line])
 
   const candMarks: CandidateMark[] = useMemo(() => {
-    if (!result || pvSel || mode !== 'play' || !result.currentPlayer) return []
+    if (!result || pvSel || keepColor || mode !== 'play' || !result.currentPlayer) return []
     const player = result.currentPlayer
     return result.candidates
       .slice(0, 3)
@@ -118,7 +159,7 @@ export function BoardScreen(p: Props) {
         rank: i,
         sub: game.setup.size <= 13 ? pct(playerWinrate(c.blackWinrate, player), 0) : undefined,
       }))
-  }, [result, pvSel, mode, game.setup.size])
+  }, [result, pvSel, keepColor, mode, game.setup.size])
 
   const deadInDraft = useMemo(() => {
     if (mode !== 'setup' || !draft) return undefined
@@ -137,16 +178,36 @@ export function BoardScreen(p: Props) {
       return
     }
     if (pvSel) setPvSel(null)
-    const r = play(game, x, y)
-    if (!r.ok) p.toast(r.reason)
-    else setGame(r.game)
+    if (p.erasing) {
+      const next = eraseStone(game, x, y)
+      if (!next) return
+      if (keepColor) prepareKeep(keepColor, p.keepMoves)
+      setGame(next)
+      return
+    }
+    const r = play(game, x, y, toMove)
+    if (!r.ok) {
+      p.toast(r.reason)
+      return
+    }
+    if (keepColor) p.advanceKeep(prediction ?? [], { x, y })
+    setGame(r.game)
   }
 
+  // Undo / Redo: the round's predictions no longer fit, start a fresh round.
+  function onHistory(g: GameState) {
+    if (keepColor) prepareKeep(keepColor, p.keepMoves)
+    setGame(g)
+  }
+
+  // No confirm: the game only changes on Done, and Cancel keeps the moves.
   function enterSetup() {
-    if (game.moves.length && !confirm('Editing turns the moves played so far into the starting position. Continue?'))
-      return
-    setDraft(collapseToSetup(game, game.moves.length ? 'manual' : game.setup.source))
+    const d = { ...collapseToSetup(game, game.moves.length ? 'manual' : game.setup.source), initialPlayer: toMove }
+    p.setErasing(false, false)
+    draftBase.current = d
+    setDraft(d)
     setPvSel(null)
+    setDraftKeepMoves(p.keepMoves)
     setMode('setup')
   }
 
@@ -157,13 +218,25 @@ export function BoardScreen(p: Props) {
       p.toast(`${dead.length} stone(s) have no liberties. Remove them or add liberties first.`)
       return
     }
+    // With Keep color on, the "to play" choice is the colour that keeps playing.
+    prepareKeep(keepColor ? draft.initialPlayer : null, draftKeepMoves)
     setGame(fromSetup(draft, game.revision + 1))
     setDraft(null)
     setMode('play')
   }
 
+  function onNewGame() {
+    const s = game.setup
+    if ((game.moves.length || s.initialStones.length) && !confirm('Start a new empty game?')) return
+    p.setErasing(false, false)
+    prepareKeep(null, p.keepMoves)
+    setGame({ ...newGame(s.size, s.rules, s.komi), revision: game.revision + 1 })
+    setPvSel(null)
+  }
+
+  // Untouched draft: save the game with its moves; edited: the position as it is on the board.
   function onExport() {
-    const text = exportSgf(game)
+    const text = exportSgf(draft && draft !== draftBase.current ? fromSetup(draft) : game)
     const blob = new Blob([text], { type: 'application/x-go-sgf' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -179,6 +252,7 @@ export function BoardScreen(p: Props) {
     try {
       const text = await file.text()
       const { game: g, warnings } = importSgf(text, { rules: game.setup.rules, komi: game.setup.komi })
+      prepareKeep(null, p.keepMoves)
       setGame({ ...g, revision: game.revision + 1 })
       setMode('play')
       setPvSel(null)
@@ -204,7 +278,7 @@ export function BoardScreen(p: Props) {
             ownership={p.showOwnership && !pvSel && mode === 'play' ? result?.blackOwnership ?? null : null}
             highlight={deadInDraft}
             onPoint={onPoint}
-            ariaLabel={`Go board, ${colorName(toMove)} to play`}
+            ariaLabel={p.erasing ? 'Go board, tap a stone to erase it' : `Go board, ${colorName(toMove)} to play`}
           />
         </div>
 
@@ -212,45 +286,59 @@ export function BoardScreen(p: Props) {
           <>
             <div class="game-line small">
               <span>
-                <span class={`dot ${toMove}`} /> <b>{colorName(toMove)}</b> to play
-              </span>
-              <span>
                 {s.size}×{s.size} · {s.rules} · komi {s.komi}
               </span>
               <span>
-                Move {game.moves.length} · captures B {caps.B} / W {caps.W}
+                Move {moveCount(game)} · captures B {caps.B} / W {caps.W}
               </span>
             </div>
-            <div class="toolbar">
-              <button class="btn" onClick={() => setGame(undo(game))} disabled={!game.moves.length}>
+            <div class="toolbar moves">
+              <button class="btn" onClick={() => onHistory(undo(game))} disabled={!game.moves.length}>
                 Undo
               </button>
-              <button class="btn" onClick={() => setGame(redo(game))} disabled={!game.redo.length}>
-                Redo
-              </button>
-              <button class="btn" onClick={() => setGame(pass(game))} data-testid="pass">
+              <button
+                class="btn"
+                onClick={() => {
+                  if (keepColor) p.advanceKeep(prediction ?? [], null)
+                  setGame(pass(game, toMove))
+                }}
+                data-testid="pass"
+              >
                 Pass
               </button>
+              <button class="btn" onClick={() => onHistory(redo(game))} disabled={!game.redo.length}>
+                Redo
+              </button>
+              <button
+                class={`btn keep-color ${keepColor ?? toMove}${keepColor ? ' on' : ''}`}
+                onClick={() => setKeepColor(keepColor ? null : toMove)}
+                aria-pressed={keepColor !== null}
+                title={
+                  keepColor
+                    ? `Move ${p.keepRound.done + 1} of ${p.keepMoves} in a row. Tap to turn colours back to alternating`
+                    : `Let ${colorName(toMove)} play ${p.keepMoves} moves in a row`
+                }
+                data-testid="keep-color"
+              >
+                {keepColor ? `Keep ${colorName(keepColor)} ${p.keepRound.done + 1}/${p.keepMoves}` : `Keep ${colorName(toMove)}`}
+              </button>
+            </div>
+            <div class="toolbar">
               <button class="btn" onClick={enterSetup} data-testid="edit-position">
                 Edit position
               </button>
-              <button class="btn" onClick={onExport}>
-                Save SGF
+              <button
+                class={p.erasing ? 'btn erase on' : 'btn erase'}
+                onClick={() => p.setErasing(!p.erasing)}
+                aria-pressed={p.erasing}
+                title={p.erasing ? 'Stop erasing and analyse again' : 'Tap stones to take them off the board'}
+                data-testid="erase"
+              >
+                {p.erasing ? 'Erasing' : 'Erase'}
               </button>
-              <button class="btn" onClick={() => fileRef.current?.click()}>
-                Open SGF
+              <button class="btn" onClick={onNewGame} data-testid="new-game">
+                New game
               </button>
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".sgf,application/x-go-sgf,text/plain"
-                hidden
-                onChange={(e) => {
-                  const f = (e.target as HTMLInputElement).files?.[0]
-                  if (f) void onImport(f)
-                  ;(e.target as HTMLInputElement).value = ''
-                }}
-              />
             </div>
             {photoNote ? (
               <p class="note small">
@@ -286,6 +374,23 @@ export function BoardScreen(p: Props) {
               }}
               idPrefix="setup"
             />
+            <fieldset class="field">
+              <legend>Keep color: moves in a row to analyse</legend>
+              <div class="seg">
+                {[1, 2, 3, 4, 5, 6].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    class={draftKeepMoves === n ? 'on' : ''}
+                    aria-pressed={draftKeepMoves === n}
+                    data-testid={`keep-moves-${n}`}
+                    onClick={() => setDraftKeepMoves(n)}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
             {deadInDraft && deadInDraft.size ? (
               <p class="note error small">Highlighted stones have no liberties.</p>
             ) : null}
@@ -293,6 +398,23 @@ export function BoardScreen(p: Props) {
               <button class="btn" onClick={() => setDraft({ ...draft, initialStones: [] })}>
                 Clear board
               </button>
+              <button class="btn" onClick={onExport}>
+                Save SGF
+              </button>
+              <button class="btn" onClick={() => fileRef.current?.click()}>
+                Open SGF
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".sgf,application/x-go-sgf,text/plain"
+                hidden
+                onChange={(e) => {
+                  const f = (e.target as HTMLInputElement).files?.[0]
+                  if (f) void onImport(f)
+                  ;(e.target as HTMLInputElement).value = ''
+                }}
+              />
               <button
                 class="btn"
                 onClick={() => {
@@ -323,6 +445,7 @@ export function BoardScreen(p: Props) {
             customSeconds={p.customSeconds}
             showOwnership={p.showOwnership}
             autoAnalyze={p.autoAnalyze}
+            paused={p.erasing}
             pvSel={result ? pvSel : null}
             connection={p.analysis.connection}
             onPreset={p.onPreset}
@@ -341,20 +464,8 @@ export function BoardScreen(p: Props) {
             <h2>Edit position</h2>
             <p class="small">
               Tap points to place or remove stones. Choose who plays next, the rules and komi, then press Done. Analysis
-              starts from this position without any move history.
+              starts from this position without any move history; Cancel keeps the moves played so far.
             </p>
-            <button
-              class="btn"
-              onClick={() => {
-                if (confirm('Start a new empty game?')) {
-                  setGame({ ...newGame(draft?.size ?? 19, draft?.rules ?? 'chinese', draft?.komi ?? 7.5), revision: game.revision + 1 })
-                  setDraft(null)
-                  setMode('play')
-                }
-              }}
-            >
-              New empty game
-            </button>
           </div>
         )}
       </div>

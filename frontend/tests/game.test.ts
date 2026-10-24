@@ -3,7 +3,9 @@ import {
   captures,
   collapseToSetup,
   currentBoard,
+  eraseStone,
   fromSetup,
+  moveCount,
   newGame,
   nextPlayer,
   pass,
@@ -32,6 +34,19 @@ describe('game rules', () => {
     g = pass(g)
     expect(nextPlayer(g)).toBe('B')
     expect(g.moves[1]).toEqual({ color: 'W', x: null, y: null })
+  })
+
+  it('lets one colour play several moves in a row', () => {
+    let g = newGame(9)
+    for (const x of [2, 3, 4]) {
+      const r = play(g, x, 4, 'B')
+      if (!r.ok) throw new Error(r.reason)
+      g = r.game
+    }
+    g = pass(g, 'B')
+    expect(g.moves.map((m) => m.color)).toEqual(['B', 'B', 'B', 'B'])
+    expect(nextPlayer(g)).toBe('W')
+    expect(currentBoard(g).get([3, 4])).toBe(1)
   })
 
   it('captures a stone and counts prisoners', () => {
@@ -141,6 +156,38 @@ describe('game rules', () => {
     const s = collapseToSetup(g)
     expect(s.initialStones.length).toBe(2)
     expect(s.initialPlayer).toBe('B')
+  })
+
+  it('erases a stone as a history step that undo/redo replay', () => {
+    let g = mustPlay(newGame(9), 4, 4) // B
+    g = mustPlay(g, 2, 2) // W
+    expect(eraseStone(g, 0, 0)).toBeNull()
+    const e = eraseStone(g, 4, 4)!
+    expect(e.revision).toBe(g.revision + 1)
+    expect(e.moves[2]).toEqual({ color: 'B', x: 4, y: 4, erase: true })
+    expect(currentBoard(e).get([4, 4])).toBe(0)
+    expect(nextPlayer(e)).toBe('B') // erasing does not pass the turn
+    expect(moveCount(e)).toBe(2)
+    expect(captures(e)).toEqual({ B: 0, W: 0 })
+    const u = undo(e)
+    expect(u.moves).toEqual(g.moves)
+    expect(currentBoard(u).get([4, 4])).toBe(1)
+    expect(currentBoard(redo(u)).get([4, 4])).toBe(0)
+    // the point is free again
+    expect(play(e, 4, 4).ok).toBe(true)
+  })
+
+  it('folds history up to the last erase into the API start position', () => {
+    let g = mustPlay(newGame(9), 4, 4) // B
+    g = mustPlay(g, 2, 2) // W
+    g = eraseStone(g, 2, 2)!
+    g = mustPlay(g, 6, 6) // B
+    const api = toApiPosition(g)
+    expect(api.initial_stones).toEqual([{ color: 'B', x: 4, y: 4 }])
+    expect(api.initial_player).toBe('B')
+    expect(api.moves).toEqual([{ color: 'B', x: 6, y: 6 }])
+    // no erase: unchanged payload
+    expect(toApiPosition(undo(undo(g))).moves.length).toBe(2)
   })
 
   it('validates komi', () => {

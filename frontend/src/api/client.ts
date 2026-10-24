@@ -65,7 +65,8 @@ export interface Preset {
 }
 
 export interface StatusResponse {
-  app: { version: string }
+  /** build: the served app's entry script (/assets/index-<hash>.js); null when not built. */
+  app: { version: string; build?: string | null }
   engine: EngineStatus
   hardware: { summary: string; [k: string]: unknown }
   presets: Preset[]

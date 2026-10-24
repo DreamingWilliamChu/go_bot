@@ -2,7 +2,7 @@
 
 Photograph a physical Go board with your iPhone, or choose a photo. Your Mac reconstructs the position, you check and correct it, and **KataGo** analyses it on the Mac's GPU. No cloud AI and no internet are needed after installation.
 
-- **Photo → position:** 9×9, 13×13 and 19×19.
+- **Photo → position:** 9×9, 11×11, 13×13 and 19×19 (11×11 is tested on synthetic photos only).
   - Handles iPhone EXIF orientation and HEIC.
   - Detects the grid automatically (OpenCV plus the optional moku-v4 neural detector).
   - Lets you drag the four corners by hand, with a magnifier, when detection is unsure. It never invents a board.

@@ -17,6 +17,7 @@ export interface PvMark {
   y: number
   color: 'B' | 'W'
   n: number
+  ghost?: boolean // a prediction, drawn see-through
 }
 
 export interface BoardViewProps {
@@ -190,7 +191,12 @@ export function BoardView(props: BoardViewProps) {
   for (const p of props.pv ?? []) {
     marks.push(
       <g key={`pv${p.n}`}>
-        <circle cx={c(p.x)} cy={c(p.y)} r={0.47} class={p.color === 'B' ? 'stone-b pv' : 'stone-w pv'} />
+        <circle
+          cx={c(p.x)}
+          cy={c(p.y)}
+          r={0.47}
+          class={`${p.color === 'B' ? 'stone-b' : 'stone-w'} ${p.ghost ? 'pv ghost' : 'pv'}`}
+        />
         <text x={c(p.x)} y={c(p.y) + 0.15} class={p.color === 'B' ? 'pv-n-b' : 'pv-n-w'}>
           {p.n}
         </text>
@@ -209,6 +215,9 @@ export function BoardView(props: BoardViewProps) {
       aria-label={props.ariaLabel ?? `${size} by ${size} Go board`}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
+      // Safari ignores touch-action inside an SVG, so two quick taps zoomed the page. Taps are
+      // handled on pointerup above; cancelling the touch's default only drops the zoom and the click.
+      onTouchEnd={(ev) => ev.preventDefault()}
       data-size={size}
     >
       <defs>
