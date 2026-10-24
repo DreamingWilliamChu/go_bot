@@ -36,7 +36,7 @@ def render_board(
         p = int(round(off + i * cell))
         cv2.line(img, (int(off), p), (int(off + (n - 1) * cell), p), (40, 30, 20), lw, cv2.LINE_AA)
         cv2.line(img, (p, int(off)), (p, int(off + (n - 1) * cell)), (40, 30, 20), lw, cv2.LINE_AA)
-    stars = {19: [3, 9, 15], 13: [3, 6, 9], 11: [3, 5, 7], 9: [2, 4, 6]}[n]
+    stars = {19: [3, 9, 15], 13: [3, 6, 9], 11: [2, 5, 8], 9: [2, 4, 6]}[n]
     for sx in stars:
         for sy in stars:
             if n != 19 and (sx, sy) not in [
