@@ -182,3 +182,72 @@ def test_root_noise_and_uniform_evaluator_smoke() -> None:
     leaves = s.prepare(1)
     s.finish(leaves, UniformEvaluator().evaluate([observe(root)]))
     assert s.root.expanded and s.root.P.sum() == pytest.approx(1.0) and not np.allclose(s.root.P, s.root.P[0])
+
+
+# ---------------------------------------------------------------------- choice trigger: bonuses are decisions
+def choice_state(rows, to_move, remaining, komi=0.5, k=3):
+    b = Board.from_rows(rows)
+    cfg = VariantConfig(
+        size=b.n,
+        komi=komi,
+        black_bonuses=remaining[0],
+        white_bonuses=remaining[1],
+        moves_per_bonus=k,
+        trigger="choice",
+    )
+    return imported_state(cfg, b, to_move, remaining, (1, 1))
+
+
+def stone_balance(s):
+    b, w = s.board.count(BLACK), s.board.count(WHITE)
+    return min(1.0, max(0.0, 0.5 + 0.08 * (b - w)))
+
+
+def test_search_offers_and_chooses_using_a_bonus() -> None:
+    root = choice_state(EMPTY5, BLACK, (1, 0))
+    s = run_search(
+        root, FnEvaluator(stone_balance), visits=1500, params=SearchParams(batch=1), rng=random.Random(0)
+    )
+    res = s.result()
+    bonus = root.config.bonus_action
+    assert bonus in [x.action for x in res.stats]
+    assert res.stats[0].action == bonus  # three stones now beat one
+    assert res.stats[0].pv[0].get("bonus") is True
+    assert res.stats[0].pv[1]["color"] == "B" and res.stats[0].pv[2]["color"] == "B"
+    assert res.policy().shape == (26,)  # the bonus is not a board action: not in the policy target
+
+
+def test_opponent_bonus_choices_are_adversarial_not_chance() -> None:
+    def search(white_bonuses: int):
+        root = choice_state(EMPTY5, BLACK, (0, white_bonuses))
+        s = run_search(
+            root, FnEvaluator(stone_balance), visits=2000, params=SearchParams(batch=1), rng=random.Random(0)
+        )
+        assert not any(isinstance(c, Chance) for c in s.root.children.values())
+        return s
+
+    s1, s0 = search(1), search(0)
+    # at White's first decision under Black's best move, White chooses to spend its bonus
+    best = int(np.argmax(s1.root.N))
+    white = s1.root.children[best]
+    assert isinstance(white, Decision) and white.actor == WHITE and white.state.can_use_bonus
+    assert int(white.actions[int(np.argmax(white.N))]) == white.state.config.bonus_action
+    # and Black's prospects are lower when White holds a bonus
+    assert s1.result().stats[0].black_win < s0.result().stats[0].black_win
+
+
+def test_exact_solver_and_search_use_a_bonus_to_capture() -> None:
+    from gobot.variant.search.exact import solve
+
+    rows = ["...OX", "OOOOX", "XXXXX", "X.X.X", "XXXXX"]
+    b = Board.from_rows(rows)
+    cfg = VariantConfig(
+        size=5, komi=9.5, black_bonuses=1, white_bonuses=0, trigger="choice", max_placements=4
+    )
+    st = imported_state(cfg, b, BLACK, (1, 0), (1, 1))
+    sol = solve(st)
+    # spending the bonus and filling all three liberties wins; so does the vital point within this cap
+    assert cfg.bonus_action in sol.best and sol.value == 1.0
+    assert min(sol.action_values.values()) < 1.0  # but most moves lose
+    s = run_search(st, HeuristicEvaluator(), visits=3000, params=SearchParams(batch=1), rng=random.Random(0))
+    assert s.result().stats[0].action in sol.best

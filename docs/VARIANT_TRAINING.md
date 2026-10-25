@@ -245,6 +245,10 @@ replay sample, so its 3M-sample window is about 180 MB.
 
 - **Strength.** A 190k-parameter network trained for an hour is weak at Go. It is far below KataGo on ordinary Go;
   results against the baselines below are the only claims made.
+- **Trigger.** The network was trained and evaluated with **random** bonuses only. In games where players choose
+  their bonuses (the app's default) its estimates are labelled approximate, and nothing about its timing advice has
+  been evaluated. Training for the choice trigger would need self-play in that mode (the pipeline's search already
+  handles the decision; the policy target does not include it).
 - **Board sizes.** Trained and evaluated on 11×11 only; the app offers it only there. Nothing is claimed for other
   sizes or for allocations, horizons or moves-per-bonus outside those it was trained and evaluated on (allocations
   0–3 per player, H = 30, 3 moves per bonus, komi 7.5).

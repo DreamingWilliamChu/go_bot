@@ -171,7 +171,7 @@ export function AnalysisPanel(p: Props) {
               <span class={`badge r${i}`}>{CAND_LABELS[i]}</span>
               <div class="cand-main">
                 <div>
-                  <b class="mv">{c.pass ? 'Pass' : c.gtp}</b>{' '}
+                  <b class="mv">{c.bonus ? 'Use bonus' : c.pass ? 'Pass' : c.gtp}</b>{' '}
                   <span>
                     {player ? `${colorName(player)} win ${pct(playerWinrate(c.blackWinrate, player))}` : ''}
                   </span>
@@ -208,7 +208,7 @@ export function AnalysisPanel(p: Props) {
                 class={`pvm ${s.color} ${i < p.pvSel!.step ? 'shown' : ''}`}
                 onClick={() => p.onPv({ cand: p.pvSel!.cand, step: i + 1 })}
               >
-                {i + 1}.{s.pass ? 'pass' : s.gtp}
+                {i + 1}.{s.bonus ? 'bonus' : s.pass ? 'pass' : s.gtp}
                 {s.turnStart?.bonus ? (
                   <span
                     class="pv-bonus"

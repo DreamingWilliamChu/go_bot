@@ -37,12 +37,18 @@ class RecordError(ValueError):
 
 
 def encode_action(action: int, size: int) -> list[int] | str:
-    return "pass" if action == size * size else [action % size, action // size]
+    if action == size * size:
+        return "pass"
+    if action == size * size + 1:
+        return "bonus"  # choice trigger: spend a bonus on this turn
+    return [action % size, action // size]
 
 
 def decode_action(a: Any, size: int) -> int:
     if a == "pass":
         return size * size
+    if a == "bonus":
+        return size * size + 1
     if isinstance(a, list) and len(a) == 2 and all(isinstance(v, int) for v in a):
         x, y = a
         if 0 <= x < size and 0 <= y < size:
@@ -192,8 +198,13 @@ def game_from_export(d: dict[str, Any], seed: int | None = None) -> VariantGame:
         s = probe.state
         seed = secrets.randbits(63) if seed is None else seed
         rng = random.Random(seed)
-        future = sample_conditional(s.remaining, s.turns_started, config.horizon, rng)
-        schedule = HiddenSchedule(frozenset(past["B"]) | future.black, frozenset(past["W"]) | future.white)
+        if config.trigger == "choice":
+            schedule = HiddenSchedule(frozenset(), frozenset())  # players choose: nothing to draw
+        else:
+            future = sample_conditional(s.remaining, s.turns_started, config.horizon, rng)
+            schedule = HiddenSchedule(
+                frozenset(past["B"]) | future.black, frozenset(past["W"]) | future.white
+            )
         game = VariantGame(initial, schedule, seed, f"{rng.getrandbits(128):032x}", provenance="import")
         for a in actions:
             game.play(a)

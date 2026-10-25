@@ -29,6 +29,7 @@ class ConfigIn(BaseModel):
     white_bonuses: int = Field(default=2, ge=0)
     moves_per_bonus: int = 3
     horizon: int | None = None  # None: default for the board size
+    trigger: Literal["choice", "random"] = "choice"  # the app's default: players decide
 
     @field_validator("size")
     @classmethod
@@ -52,7 +53,7 @@ class CreateRequest(BaseModel):
 
 
 class Action(BaseModel):
-    type: Literal["place", "pass", "undo", "redo"]
+    type: Literal["place", "pass", "bonus", "undo", "redo"]
     x: int | None = None
     y: int | None = None
 
@@ -153,6 +154,8 @@ def build_router(settings: Settings) -> tuple[APIRouter, GameStore]:
                 cfg = game.state.config
                 if a.type == "pass":
                     action = cfg.pass_action
+                elif a.type == "bonus":
+                    action = cfg.bonus_action
                 else:
                     if a.x is None or a.y is None or not (0 <= a.x < cfg.size and 0 <= a.y < cfg.size):
                         raise HTTPException(400, "A placement needs a point on the board.")

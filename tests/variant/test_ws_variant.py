@@ -13,7 +13,7 @@ def client(settings) -> TestClient:
 
 
 def new_game(c: TestClient, **cfg) -> dict:
-    return c.post("/api/variant/games", json={"config": {"size": 9, **cfg}}).json()
+    return c.post("/api/variant/games", json={"config": {"trigger": "random", "size": 9, **cfg}}).json()
 
 
 def collect(ws, rid: str) -> list[dict]:
@@ -151,3 +151,41 @@ def test_standard_katago_and_katago_evaluator_on_a_bonus_position(tmp_settings) 
             assert final["type"] == "final", final
             assert final["evaluator"]["kind"] == "katago-net" and final["evaluator"]["approximate"]
             assert final["budget"]["visits"] >= 64
+
+
+def test_choice_games_offer_using_a_bonus_and_say_so(tmp_settings) -> None:
+    with client(tmp_settings) as c:
+        v = c.post(
+            "/api/variant/games", json={"config": {"size": 9, "black_bonuses": 1, "white_bonuses": 1}}
+        ).json()
+        assert v["state"]["config"]["trigger"] == "choice"
+        with c.websocket_connect("ws://localhost/api/analyze") as ws:
+            ws.send_json(
+                {
+                    "type": "analyze",
+                    "requestId": "c1",
+                    "source": "variant",
+                    "evaluator": "heuristic",
+                    "variant": {"gameId": v["gameId"], "revision": v["revision"]},
+                    "params": {"max_time": 3.0, "max_visits": 400},
+                }
+            )
+            final = collect(ws, "c1")[-1]
+        assert final["type"] == "final"
+        assert "choose when to use their bonuses" in final["evaluator"]["note"]
+        bonus = [x for x in final["candidates"] if x["bonus"]]
+        assert bonus and bonus[0]["gtp"] == "bonus" and bonus[0]["x"] is None and not bonus[0]["pass"]
+        assert bonus[0]["pv"][0]["bonus"] is True and all(s["color"] == "B" for s in bonus[0]["pv"][1:4])
+
+
+def test_trained_net_is_labelled_approximate_in_choice_games() -> None:
+    from gobot.variant.config import VariantConfig
+    from gobot.variant.service import label_for_rules
+    from gobot.variant.state import initial_state
+
+    trained = {"kind": "variant-net", "label": "net", "modelVersion": "m", "approximate": False, "note": ""}
+    random_state = initial_state(VariantConfig(size=9, trigger="random"))
+    choice_state = initial_state(VariantConfig(size=9, trigger="choice"))
+    assert label_for_rules(trained, random_state)["approximate"] is False
+    out = label_for_rules(trained, choice_state)
+    assert out["approximate"] is True and "random bonuses" in out["note"]

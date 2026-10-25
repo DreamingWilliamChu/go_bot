@@ -25,7 +25,7 @@ Photograph a physical Go board with your iPhone, or choose a photo. Your Mac rec
 - **Remote access with sign-in:** `--tunnel` makes the app reachable from anywhere through a Cloudflare Tunnel.
 - **Keep color and Bonus Mode (bonus-turn Go):**
   - *Keep color* is a manual lock: the chosen colour plays every move until you tap it again.
-  - *Bonus Mode* plays a variant in which each player gets a few hidden, randomly timed bonus turns of several moves in a row ([rules](docs/BONUS_GO.md)). The Mac keeps the hidden schedule. The board announces each bonus before the move, locks the player for the bonus moves, then switches. It shows the bonuses left and the public chance of the next one.
+  - *Bonus Mode* plays a variant in which each player has a few bonus turns of several moves in a row ([rules](docs/BONUS_GO.md)). By default **you choose** when to use one: before the first move of a turn, tap Keep color ("Use bonus"). Alternatively a game can use **random** bonuses, scheduled secretly by the Mac. Either way the board announces the bonus before the move, locks the player for the bonus moves, then switches, and shows the bonuses left.
   - Bonus positions can be analysed with standard KataGo (which ignores future bonuses), with a bonus-aware search using KataGo's network as an approximate evaluator, or with a small network trained by bonus self-play ([training](docs/VARIANT_TRAINING.md), [design](docs/VARIANT_ARCHITECTURE.md)).
   - Every device except the Mac signs in with a username and password, which you set and change under *Engine → Account*.
 

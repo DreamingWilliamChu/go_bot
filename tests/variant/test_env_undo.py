@@ -82,3 +82,26 @@ def test_random_games_replay_deterministically_from_the_seed() -> None:
         a.play(mv)
         b.play(mv)
     assert snapshot(a) == snapshot(b)
+
+
+def test_choice_bonus_undo_redo_and_records() -> None:
+    import json
+
+    from gobot.variant.serialization import game_from_json, game_to_json
+
+    g = VariantGame.new(VariantConfig(size=5, black_bonuses=1, white_bonuses=1, trigger="choice"), seed=1)
+    bonus = g.state.config.bonus_action
+    g.play(bonus)
+    g.play(0)
+    g.play(1)
+    assert g.state.moves_left == 1 and g.state.remaining == (0, 1)
+    g.undo()
+    g.undo()
+    g.undo()
+    assert not g.state.bonus_active and g.state.remaining == (1, 1)
+    g.redo()
+    assert g.state.bonus_active and g.state.remaining == (0, 1)
+    d = json.loads(json.dumps(game_to_json(g, private=True)))
+    assert d["actions"] == ["bonus"] and d["redo"] == [[1, 0], [0, 0]]
+    g2 = game_from_json(d)
+    assert public_view(g2.state) == public_view(g.state)

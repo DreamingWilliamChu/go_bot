@@ -155,7 +155,8 @@ export function VariantBoardScreen(p: Props) {
 
         <div class="game-line small">
           <span>
-            {cfg.size}×{cfg.size} · chinese · komi {cfg.komi} · {cfg.moves_per_bonus} moves per bonus · H {cfg.horizon}
+            {cfg.size}×{cfg.size} · chinese · komi {cfg.komi} · {cfg.moves_per_bonus} moves per bonus ·{' '}
+            {cfg.trigger === 'choice' ? 'bonuses by choice' : `random bonuses, H ${cfg.horizon}`}
           </span>
           <span>
             Move {s.placements} · captures B {s.captures.B} / W {s.captures.W}
@@ -174,13 +175,22 @@ export function VariantBoardScreen(p: Props) {
             on: lock.on,
             label: lock.label,
             title: lock.title,
-            readOnly: true,
-            onClick: () =>
+            readOnly: !lock.canUse,
+            action: lock.canUse,
+            onClick: () => {
+              if (lock.canUse) {
+                setPvSel(null)
+                void act({ type: 'bonus' })
+                return
+              }
               p.toast(
                 lock.on
                   ? `${lock.title} Taps cannot change it.`
-                  : 'Bonus Mode: Keep color turns on only for a bonus turn. For an unlimited manual Keep, turn Bonus Mode off.',
-              ),
+                  : cfg.trigger === 'choice'
+                    ? `${lock.title} For an unlimited manual Keep, turn Bonus Mode off.`
+                    : 'Bonus Mode: Keep color turns on only for a bonus turn. For an unlimited manual Keep, turn Bonus Mode off.',
+              )
+            },
           }}
           bonusOn
           onBonus={p.onLeave}

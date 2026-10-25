@@ -19,11 +19,15 @@ async function noHorizontalOverflow(page: Page) {
   expect(sw).toBeLessThanOrEqual(iw)
 }
 
-async function newBonusGame(page: Page, opts: { size?: number; black: number; white: number; horizon: number }) {
+async function newBonusGame(
+  page: Page,
+  opts: { size?: number; black: number; white: number; horizon?: number; trigger?: 'random' | 'choice' },
+) {
   await page.getByTestId('bonus-mode').click()
   await expect(page.getByTestId('bonus-entry-dialog')).toBeVisible()
+  await page.getByTestId(`entry-trigger-${opts.trigger ?? 'random'}`).click()
   if (opts.size) await page.getByTestId(`entry-size-${opts.size}`).click()
-  await page.getByTestId('entry-horizon').fill(String(opts.horizon))
+  if (opts.horizon) await page.getByTestId('entry-horizon').fill(String(opts.horizon))
   await page.getByTestId('entry-black').fill(String(opts.black))
   await page.getByTestId('entry-white').fill(String(opts.white))
   await page.getByTestId('bonus-new').click()
@@ -101,6 +105,7 @@ test('Bonus Mode never changes the standard game; manual Keep returns when it is
 test('analysis branch and photo import require an explicit bonus state', async ({ page }) => {
   await tapPoint(page, 19, 3, 3)
   await page.getByTestId('bonus-mode').click()
+  await page.getByTestId('entry-trigger-random').click()
   await page.getByTestId('bonus-branch').click()
   const dialog = page.getByTestId('bonus-state-dialog')
   await expect(dialog).toContainText('History unknown')
@@ -152,4 +157,36 @@ test('bonus analysis: source picker, bonus search labels, KataGo ignores future 
 test('Engine tab lists bonus-variant networks with their provenance', async ({ page }) => {
   await page.getByTestId('tab-settings').click()
   await expect(page.getByTestId('bonus-networks')).toContainText('Bonus-variant networks')
+})
+
+test('you choose: Keep color uses a bonus before the first move, then locks for three moves', async ({ page }) => {
+  await newBonusGame(page, { size: 9, black: 2, white: 1, trigger: 'choice' })
+  const keep = page.getByTestId('keep-color')
+  // nothing is random: the turn starts normal, and the player may spend a bonus
+  await expect(page.getByTestId('bonus-turn')).toContainText('Black to play — normal turn (1 move)')
+  await expect(keep).toHaveText('Use bonus · 2 left')
+  await expect(page.getByTestId('bonus-chance')).toContainText('Black may use a bonus now')
+  await keep.click()
+  await expect(page.getByTestId('bonus-announcement')).toHaveText('Bonus! Black plays 3 moves in a row this turn.')
+  await expect(page.getByTestId('bonuses-left')).toHaveText('Bonuses left — Black: 1 · White: 1')
+  await expect(keep).toHaveText('Keep Black · bonus 1/3')
+  await tapPoint(page, 9, 2, 2)
+  // mid-turn the control cannot add or extend anything
+  await keep.click()
+  await expect(page.getByTestId('toast')).toContainText('Taps cannot change it')
+  await expect(page.getByTestId('bonus-turn')).toContainText('Black bonus turn — 2 moves remaining')
+  await tapPoint(page, 9, 3, 2)
+  await tapPoint(page, 9, 4, 2)
+  await expect(page.getByTestId('bonus-turn')).toContainText('White to play — normal turn (1 move)')
+  await expect(keep).toHaveText('Use bonus · 1 left')
+  // White plays a normal move instead; Black may use its last bonus next turn
+  await tapPoint(page, 9, 6, 6)
+  await expect(keep).toHaveText('Use bonus · 1 left')
+  await tapPoint(page, 9, 2, 6) // Black: normal move, keeps the bonus
+  await expect(page.getByTestId('bonuses-left')).toHaveText('Bonuses left — Black: 1 · White: 1')
+  // undo restores the spent bonus exactly
+  for (let i = 0; i < 6; i++) await page.getByRole('button', { name: 'Undo' }).click()
+  await expect(page.getByTestId('bonuses-left')).toHaveText('Bonuses left — Black: 2 · White: 1')
+  await expect(keep).toHaveText('Use bonus · 2 left')
+  await noHorizontalOverflow(page)
 })

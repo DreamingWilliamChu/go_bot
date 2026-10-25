@@ -21,8 +21,11 @@ export function BonusEntryDialog(p: Props) {
       <div class="modal panel" data-testid="bonus-entry-dialog">
         <h2>Bonus Mode</h2>
         <p class="small">
-          Bonus-turn Go: each player gets a few hidden, randomly timed bonus turns of several moves in a row. Your
-          standard game stays as it is and comes back when you turn Bonus Mode off.
+          Bonus-turn Go: each player has a few bonus turns of several moves in a row,{' '}
+          {p.prefs.trigger === 'choice'
+            ? 'used whenever the player chooses (before the first move of a turn).'
+            : 'timed at random and kept secret by the Mac until they start.'}{' '}
+          Your standard game stays as it is and comes back when you turn Bonus Mode off.
         </p>
         {p.canResume ? (
           <button class="btn primary big wide" onClick={p.onResume} disabled={p.busy} data-testid="bonus-resume">

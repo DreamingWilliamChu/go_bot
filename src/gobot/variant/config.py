@@ -12,6 +12,8 @@ DEFAULT_HORIZON = {9: 20, 11: 30, 13: 45, 19: 90}
 DEFAULT_BONUSES = 2
 DEFAULT_MOVES_PER_BONUS = 3
 MAX_SIZE = 25  # GTP letters; the web API restricts sizes further (go.coords.SUPPORTED_SIZES)
+MAX_CHOICE_BONUSES = 50
+Trigger = Literal["random", "choice"]
 
 
 def default_horizon(size: int) -> int:
@@ -29,7 +31,10 @@ class VariantConfig(BaseModel):
     black_bonuses: int = Field(default=DEFAULT_BONUSES, ge=0)
     white_bonuses: int = Field(default=DEFAULT_BONUSES, ge=0)
     moves_per_bonus: int = Field(default=DEFAULT_MOVES_PER_BONUS, ge=2, le=9)
-    horizon: int = Field(default=0, ge=0, le=1000)  # 0 / missing: default for the board size
+    # random: hidden schedule over personal turns 1..H (docs/BONUS_GO.md §4)
+    # choice: the player to move decides, before the first move of a turn, to spend a bonus (§4a)
+    trigger: Trigger = "random"
+    horizon: int = Field(default=0, ge=0, le=1000)  # 0 / missing: default for the board size (random only)
     # Self-play / search only: stop after this many placements and mark the game truncated.
     max_placements: int | None = Field(default=None, ge=1)
 
@@ -49,8 +54,10 @@ class VariantConfig(BaseModel):
         if abs(self.komi) > 150 or abs(self.komi * 2 - round(self.komi * 2)) > 1e-9:
             raise ValueError("komi must be a multiple of 0.5 between -150 and 150")
         for name, n in (("black_bonuses", self.black_bonuses), ("white_bonuses", self.white_bonuses)):
-            if n > self.horizon:
+            if self.trigger == "random" and n > self.horizon:
                 raise ValueError(f"{name} ({n}) must be between 0 and the horizon H ({self.horizon})")
+            if self.trigger == "choice" and n > MAX_CHOICE_BONUSES:
+                raise ValueError(f"{name} ({n}) must be between 0 and {MAX_CHOICE_BONUSES}")
         return self
 
     def allocation(self, player: int) -> int:
@@ -64,6 +71,12 @@ class VariantConfig(BaseModel):
     @property
     def pass_action(self) -> int:
         return self.size * self.size
+
+    @property
+    def bonus_action(self) -> int:
+        """Choice trigger only: "spend a bonus now" (before the first move of a turn). Not a board
+        action, so it is outside the network's N*N+1 policy."""
+        return self.size * self.size + 1
 
     def public(self) -> dict[str, object]:
         return self.model_dump()

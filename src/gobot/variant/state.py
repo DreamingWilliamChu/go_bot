@@ -77,9 +77,25 @@ class VariantState:
         return self.phase == TERMINAL
 
     def trigger_probability(self, player: int) -> float:
-        """Public P(``player``'s next personal turn is a bonus turn)."""
+        """Public P(``player``'s next personal turn is a bonus turn by the random trigger); 0 when the
+        players choose their bonuses (nothing is random then)."""
+        if self.config.trigger == "choice":
+            return 0.0
         i = player - 1
         return trigger_probability(self.remaining[i], self.turns_started[i], self.config.horizon)
+
+    @property
+    def can_use_bonus(self) -> bool:
+        """Choice trigger: ``to_move`` may spend a bonus now - a turn in progress that is still a
+        normal turn with no move made yet, and a bonus left."""
+        return (
+            self.config.trigger == "choice"
+            and self.phase == IN_TURN
+            and not self.bonus_active
+            and self.placed_this_turn == 0
+            and self.moves_left == self.turn_moves == 1
+            and self.remaining[self.to_move - 1] > 0
+        )
 
     def legal_actions(self) -> list[int]:
         """Legal actions for ``to_move`` in this turn: placements, then the pass action (N*N)."""
@@ -106,6 +122,8 @@ class VariantState:
             return False
         if action == self.config.pass_action:
             return True
+        if action == self.config.bonus_action:
+            return self.can_use_bonus
         return action in self.legal_actions()
 
 
@@ -162,8 +180,9 @@ def imported_state(
         raise ValueError("the current turn counts as a started personal turn (turns started >= 1)")
     if min(turns_started) < 0 or min(remaining) < 0:
         raise ValueError("counts cannot be negative")
-    for j in (0, 1):
-        check_feasible(remaining[j], turns_started[j], config.horizon)
+    if config.trigger == "random":
+        for j in (0, 1):
+            check_feasible(remaining[j], turns_started[j], config.horizon)
     if bonus_active:
         if not 1 <= moves_left <= config.moves_per_bonus:
             raise ValueError(f"a bonus turn has 1..{config.moves_per_bonus} moves left")
@@ -199,10 +218,14 @@ def start_turn(state: VariantState, bonus: bool) -> VariantState:
     if state.phase != TURN_START:
         raise ValueError(f"no turn start to resolve in phase {state.phase}")
     i = state.to_move - 1
+    if state.config.trigger == "choice" and bonus:
+        raise ValueError(
+            "with the choice trigger a turn starts as a normal turn; the player may then use a bonus"
+        )
     p = state.trigger_probability(state.to_move)
     if bonus and p <= 0.0:
         raise ValueError(f"{COLOR_NAMES[state.to_move]} has no bonus available for this turn")
-    if not bonus and p >= 1.0:
+    if not bonus and p >= 1.0 and state.config.trigger == "random":
         raise ValueError(f"{COLOR_NAMES[state.to_move]}'s bonus is forced on this turn")
     k = state.config.moves_per_bonus if bonus else 1
     remaining = list(state.remaining)
@@ -229,6 +252,8 @@ def apply_action(state: VariantState, action: int) -> VariantState:
     cfg = state.config
     if action == cfg.pass_action:
         return _end_turn(state)
+    if action == cfg.bonus_action:
+        return use_bonus(state)
     color = state.to_move
     board, n_cap = state.board.play(action, color, state.seen)
     caps = (
@@ -255,6 +280,27 @@ def apply_action(state: VariantState, action: int) -> VariantState:
     if ns.moves_left == 0:
         return _end_turn(ns)
     return ns
+
+
+def use_bonus(state: VariantState) -> VariantState:
+    """Choice trigger: ``to_move`` spends one bonus; this turn becomes a bonus turn of
+    ``moves_per_bonus`` moves in total (none made yet). Only before the turn's first move."""
+    if not state.can_use_bonus:
+        if state.config.trigger != "choice":
+            raise IllegalMove("bonus", "In this game bonus turns are random; they cannot be chosen.")
+        if state.bonus_active:
+            raise IllegalMove("bonus", "This is already a bonus turn.")
+        if state.phase == IN_TURN and state.remaining[state.to_move - 1] <= 0:
+            raise IllegalMove("bonus", f"{COLOR_NAMES[state.to_move]} has no bonus left.")
+        raise IllegalMove("bonus", "A bonus can only be used before the first move of a turn.")
+    k = state.config.moves_per_bonus
+    i = state.to_move - 1
+    remaining = (
+        (state.remaining[0] - 1, state.remaining[1])
+        if i == 0
+        else (state.remaining[0], state.remaining[1] - 1)
+    )
+    return replace(state, bonus_active=True, moves_left=k, turn_moves=k, remaining=remaining)
 
 
 def _end_turn(state: VariantState) -> VariantState:
@@ -316,5 +362,6 @@ def public_view(state: VariantState) -> dict[str, object]:
         ),
         "historyKnown": state.history_known,
         "legal": [a for a in state.legal_actions() if a != cfg.pass_action],
+        "canUseBonus": state.can_use_bonus,
         "result": state.result.public() if state.result else None,
     }

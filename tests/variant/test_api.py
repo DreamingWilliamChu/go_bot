@@ -25,7 +25,15 @@ def test_create_play_bonus_turn_and_switch(tmp_settings) -> None:
         # allocation = H makes every Black turn a bonus turn: deterministic without a seed API
         v = c.post(
             "/api/variant/games",
-            json={"config": {"size": 9, "black_bonuses": 2, "white_bonuses": 0, "horizon": 2}},
+            json={
+                "config": {
+                    "trigger": "random",
+                    "size": 9,
+                    "black_bonuses": 2,
+                    "white_bonuses": 0,
+                    "horizon": 2,
+                }
+            },
         ).json()
         s = v["state"]
         assert (
@@ -55,7 +63,8 @@ def test_create_play_bonus_turn_and_switch(tmp_settings) -> None:
 def test_illegal_moves_stale_revisions_and_undo(tmp_settings) -> None:
     with client(tmp_settings) as c:
         v = c.post(
-            "/api/variant/games", json={"config": {"size": 9, "black_bonuses": 0, "white_bonuses": 0}}
+            "/api/variant/games",
+            json={"config": {"trigger": "random", "size": 9, "black_bonuses": 0, "white_bonuses": 0}},
         ).json()
         v = act(c, v, type="place", x=4, y=4)
         r = c.post(
@@ -86,7 +95,8 @@ def test_illegal_moves_stale_revisions_and_undo(tmp_settings) -> None:
 def test_games_survive_a_restart_and_never_leak_the_schedule(tmp_settings) -> None:
     with client(tmp_settings) as c:
         v = c.post(
-            "/api/variant/games", json={"config": {"size": 11, "black_bonuses": 3, "white_bonuses": 3}}
+            "/api/variant/games",
+            json={"config": {"trigger": "random", "size": 11, "black_bonuses": 3, "white_bonuses": 3}},
         ).json()
         v = act(c, v, type="place", x=5, y=5)
         text = json.dumps(v) + c.get(f"/api/variant/games/{v['gameId']}/export").text
@@ -104,23 +114,31 @@ def test_games_survive_a_restart_and_never_leak_the_schedule(tmp_settings) -> No
 def test_allocations_are_fixed_per_game(tmp_settings) -> None:
     with client(tmp_settings) as c:
         v = c.post(
-            "/api/variant/games", json={"config": {"size": 9, "black_bonuses": 1, "white_bonuses": 1}}
+            "/api/variant/games",
+            json={"config": {"trigger": "random", "size": 9, "black_bonuses": 1, "white_bonuses": 1}},
         ).json()
         other = c.post(
-            "/api/variant/games", json={"config": {"size": 9, "black_bonuses": 5, "white_bonuses": 0}}
+            "/api/variant/games",
+            json={"config": {"trigger": "random", "size": 9, "black_bonuses": 5, "white_bonuses": 0}},
         ).json()
         assert c.get(f"/api/variant/games/{v['gameId']}").json()["state"]["config"]["black_bonuses"] == 1
         assert other["state"]["config"]["black_bonuses"] == 5
         assert (
-            c.post("/api/variant/games", json={"config": {"size": 9, "black_bonuses": 21}}).status_code == 422
+            c.post(
+                "/api/variant/games", json={"config": {"trigger": "random", "size": 9, "black_bonuses": 21}}
+            ).status_code
+            == 422
         )
-        assert c.post("/api/variant/games", json={"config": {"size": 10}}).status_code == 422
+        assert (
+            c.post("/api/variant/games", json={"config": {"trigger": "random", "size": 10}}).status_code
+            == 422
+        )
 
 
 def test_import_requires_a_feasible_explicit_bonus_state(tmp_settings) -> None:
     with client(tmp_settings) as c:
         body = {
-            "config": {"size": 9, "black_bonuses": 2, "white_bonuses": 2},
+            "config": {"trigger": "random", "size": 9, "black_bonuses": 2, "white_bonuses": 2},
             "stones": [{"color": "B", "x": 2, "y": 2}, {"color": "W", "x": 6, "y": 6}],
             "toMove": "W",
             "remaining": {"B": 1, "W": 2},
@@ -151,7 +169,15 @@ def test_open_an_export_keeps_the_history(tmp_settings) -> None:
     with client(tmp_settings) as c:
         v = c.post(
             "/api/variant/games",
-            json={"config": {"size": 9, "black_bonuses": 1, "white_bonuses": 2, "horizon": 3}},
+            json={
+                "config": {
+                    "trigger": "random",
+                    "size": 9,
+                    "black_bonuses": 1,
+                    "white_bonuses": 2,
+                    "horizon": 3,
+                }
+            },
         ).json()
         for x in range(6):
             v = act(c, v, type="place", x=x, y=x % 3)
@@ -162,3 +188,36 @@ def test_open_an_export_keeps_the_history(tmp_settings) -> None:
         assert w["gameId"] != v["gameId"] and w["provenance"] == "import"
         assert w["state"]["grid"] == v["state"]["grid"] and w["state"]["remaining"] == v["state"]["remaining"]
         assert w["events"] == v["events"]
+
+
+def test_new_games_default_to_player_chosen_bonuses(tmp_settings) -> None:
+    with client(tmp_settings) as c:
+        v = c.post(
+            "/api/variant/games", json={"config": {"size": 9, "black_bonuses": 2, "white_bonuses": 1}}
+        ).json()
+        s = v["state"]
+        assert s["config"]["trigger"] == "choice" and s["canUseBonus"] and not s["bonusActive"]
+        assert s["nextTurnBonusProbability"] == {"B": 0.0, "W": 0.0}
+        v = act(c, v, type="bonus")
+        s = v["state"]
+        assert (
+            s["bonusActive"]
+            and s["movesLeft"] == 3
+            and s["remaining"] == {"B": 1, "W": 1}
+            and not s["canUseBonus"]
+        )
+        assert v["newEvents"] == [{"type": "bonus_used", "player": "B", "turnIndex": 1, "moves": 3}]
+        for x in (0, 1, 2):
+            v = act(c, v, type="place", x=x, y=0)
+        assert v["state"]["toMove"] == "W" and v["state"]["canUseBonus"]
+        v = act(c, v, type="bonus")  # White spends its only bonus
+        v = act(c, v, type="place", x=8, y=8)
+        # mid-turn: a bonus can never be added to or extended
+        r = c.post(
+            f"/api/variant/games/{v['gameId']}/actions",
+            json={"expectedRevision": v["revision"], "action": {"type": "bonus"}},
+        )
+        assert r.status_code == 400 and r.json()["detail"]["reason"] == "bonus"
+        v = act(c, v, type="undo")
+        v = act(c, v, type="undo")
+        assert v["state"]["remaining"] == {"B": 1, "W": 1} and v["state"]["canUseBonus"]

@@ -64,6 +64,19 @@ class Environment:
         before = self.state
         after = apply_action(before, action)
         n = before.config.size
+        if action == before.config.bonus_action:
+            # choice trigger: the player decided to spend a bonus on this turn (announced before a move)
+            self.state = after
+            self.actions.append(action)
+            self.events.append(
+                {
+                    "type": "bonus_used",
+                    "player": COLOR_NAMES[before.to_move],
+                    "turnIndex": before.turns_started[before.to_move - 1],
+                    "moves": after.moves_left,
+                }
+            )
+            return self.events[n0:]
         ev: dict[str, Any] = {"type": "move", "player": COLOR_NAMES[before.to_move]}
         if action == before.config.pass_action:
             ev["pass"] = True
@@ -108,7 +121,10 @@ class VariantGame:
     def new(cls, config: VariantConfig, seed: int | None = None) -> VariantGame:
         seed = secrets.randbits(63) if seed is None else seed
         rng = random.Random(seed)
-        schedule = sample_schedule(config.black_bonuses, config.white_bonuses, config.horizon, rng)
+        if config.trigger == "choice":
+            schedule = HiddenSchedule(frozenset(), frozenset())  # nothing random: players choose
+        else:
+            schedule = sample_schedule(config.black_bonuses, config.white_bonuses, config.horizon, rng)
         return cls(initial_state(config), schedule, seed, salt=f"{rng.getrandbits(128):032x}")
 
     @classmethod
@@ -117,7 +133,10 @@ class VariantGame:
         its conditional distribution."""
         seed = secrets.randbits(63) if seed is None else seed
         rng = random.Random(seed)
-        schedule = sample_conditional(state.remaining, state.turns_started, state.config.horizon, rng)
+        if state.config.trigger == "choice":
+            schedule = HiddenSchedule(frozenset(), frozenset())
+        else:
+            schedule = sample_conditional(state.remaining, state.turns_started, state.config.horizon, rng)
         return cls(state, schedule, seed, salt=f"{rng.getrandbits(128):032x}", provenance=provenance)
 
     def _rebuild(self) -> None:

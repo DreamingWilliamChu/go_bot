@@ -7,6 +7,7 @@ export interface LockButton {
   label: string
   title: string
   readOnly?: boolean // Bonus Mode: only a bonus turn turns it on
+  action?: boolean // choice trigger: tapping it uses a bonus now
   onClick: () => void
 }
 
@@ -39,7 +40,7 @@ export function MovesToolbar(p: Props) {
       </div>
       <div class="toolbar locks">
         <button
-          class={`btn keep-color ${k.color}${k.on ? ' on' : ''}${k.readOnly ? ' read-only' : ''}`}
+          class={`btn keep-color ${k.color}${k.on ? ' on' : ''}${k.readOnly ? ' read-only' : ''}${k.action ? ' use-bonus' : ''}`}
           onClick={k.onClick}
           aria-pressed={k.on}
           title={k.title}

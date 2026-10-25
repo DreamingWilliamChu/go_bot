@@ -10,9 +10,13 @@ export interface VariantConfig {
   black_bonuses: number
   white_bonuses: number
   moves_per_bonus: number
+  trigger: Trigger
   horizon: number
   max_placements: number | null
 }
+
+/** choice: the player to move decides to use a bonus before the first move of a turn; random: hidden schedule. */
+export type Trigger = 'choice' | 'random'
 
 export interface ScoreResult {
   black_stones: number
@@ -53,12 +57,14 @@ export interface VariantState {
   lastPlacement: { x: number; y: number; color: Color } | null
   historyKnown: boolean
   legal: number[]
+  canUseBonus: boolean // choice trigger: the player to move may use a bonus now
   result: GameResult | null
 }
 
 export type VariantEvent =
   | { type: 'turn_start'; player: Color; turnIndex: number; bonus: boolean; moves: number; probability: number }
   | { type: 'move'; player: Color; x?: number; y?: number; pass?: true; captured?: number; turnEnded: boolean }
+  | { type: 'bonus_used'; player: Color; turnIndex: number; moves: number }
   | ({ type: 'game_end' } & GameResult)
 
 export interface VariantView {
@@ -77,6 +83,7 @@ export interface VariantView {
 
 /** Settings for the *next* bonus game (never applied to a game in progress). */
 export interface BonusPrefs {
+  trigger: Trigger
   size: number
   komi: number
   blackBonuses: number
@@ -92,6 +99,7 @@ export function horizonFor(p: Pick<BonusPrefs, 'size' | 'horizon'>): number {
 }
 
 export const DEFAULT_BONUS_PREFS: BonusPrefs = {
+  trigger: 'choice',
   size: 11,
   komi: 7.5,
   blackBonuses: 2,

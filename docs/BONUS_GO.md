@@ -10,7 +10,7 @@ be played.
 | | Bonus Mode **off** (standard Go) | Bonus Mode **on** (this variant) |
 |---|---|---|
 | Who moves | Players alternate | Players alternate turns; a bonus turn has several moves |
-| Keep color | A manual lock: tap it and the shown colour plays every move until you tap it again. No move limit | Read-only indicator. It turns on by itself for a bonus turn and off when the turn's moves are used up. Tapping it never grants moves |
+| Keep color | A manual lock: tap it and the shown colour plays every move until you tap it again. No move limit | **You choose** (default): before the first move of a turn it reads "Use bonus · n left"; tapping it spends one bonus and locks the player for the bonus moves. **Random**: a read-only indicator that turns on by itself for a scheduled bonus turn. Either way it turns off by itself when the turn's moves are used up, and it can never add or extend a bonus mid-turn |
 | Game state | In the browser (as before) | On the Mac, which holds the hidden bonus schedule |
 
 Bonus Mode is never switched on or off silently in the middle of a game. Turning it on asks whether to start a new
@@ -41,10 +41,15 @@ A *turn* belongs to one player.
 
 Every turn, normal or bonus, counts as one **personal turn** of its player.
 
-### When a bonus triggers
+### When a bonus starts
 
-At the start of each personal turn the rules decide (from the hidden schedule, §4) whether it is a bonus turn. If
-it is:
+Each game uses one of two **triggers**, fixed when the game is created (the app's default is *you choose*):
+
+- **You choose** (§4a): at the start of a personal turn, before its first move, the player may spend one of their
+  remaining bonuses. The turn then becomes a bonus turn.
+- **Random** (§4): the hidden schedule decides at the start of each personal turn whether it is a bonus turn.
+
+From then on both are the same:
 
 1. The bonus is **announced before the player chooses a move**.
 2. One of that player's bonus opportunities is consumed (remaining count − 1).
@@ -53,7 +58,7 @@ it is:
 5. Keep color turns off when the moves are used up (or the player passes).
 6. The opponent's turn starts.
 
-## 4. Random triggering (provisional default)
+## 4. Random triggering
 
 The number of bonuses alone does not define a random process. This one does:
 
@@ -111,6 +116,24 @@ bonus) and then change their own move. This is an analysis tool, not a tournamen
 At creation the Mac publishes a SHA-256 commitment to the schedule (plus a random salt). When the game ends the
 schedule and salt are revealed, so the commitment can be checked.
 
+## 4a. Bonuses chosen by the players (the app's default)
+
+- Each player has an allocation of bonuses (0–50). Remaining counts are public.
+- At the start of their personal turn, **before the turn's first move**, the player to move may use one: the turn
+  becomes a bonus turn of `moves_per_bonus` moves in total. In the app this is the Keep color button ("Use
+  bonus · n left").
+- A bonus can be used only by the player to move, only before that turn's first move, and only with one left. It
+  can never be used mid-turn, added to a bonus turn, or extended. Using a bonus and then passing at once makes a
+  pass-only turn (the bonus is spent).
+- There is no deadline and nothing is random or hidden: unused bonuses lapse when the game ends. The horizon H is
+  not used.
+- Undo/redo restores the bonus counts exactly. The game record stores the decision as an action (`"bonus"`) and a
+  `bonus_used` event.
+- For the search, using a bonus is a **decision** of the player to move. The opponent's later use of their bonuses
+  is their decision too, so it is searched adversarially, not as chance. The evaluators do not value a bonus kept
+  for later, so the search's advice on *when* to use one is approximate. The trained network was trained with
+  random bonuses only, so in choice games its estimates are labelled approximate.
+
 ## 5. End of the game
 
 A turn is **pass-only** if its player placed no stone in it: a normal turn that was a pass, or a bonus turn whose
@@ -158,8 +181,9 @@ enter the bonus state explicitly:
 - `moves_per_bonus` and H,
 - how many consecutive pass-only turns just happened (normally 0).
 
-The Mac validates these (0 ≤ r ≤ H − t) and draws a fresh hidden schedule for the remaining bonuses, uniform over
-the remaining eligible turns, so the future is distributed exactly as in §4. Such games are labelled **"history
+For random-trigger games the Mac validates these (0 ≤ r ≤ H − t) and draws a fresh hidden schedule for the remaining
+bonuses, uniform over the remaining eligible turns, so the future is distributed exactly as in §4. For games where
+players choose (§4a) only the remaining counts and the current turn's state matter. Such games are labelled **"history
 unknown"**: superko only compares positions from the imported position onwards, and earlier bonus timing is unknown.
 
 ## 8. Analysis sources and their limits

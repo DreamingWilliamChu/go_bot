@@ -49,6 +49,9 @@ class SearchParams:
     # Chance model for future bonuses. False = "bonus-blind" (an evaluation baseline): the search
     # imagines that no further bonus can trigger; the current turn's moves are still played out.
     model_bonuses: bool = True
+    # Choice trigger: prior of "use a bonus now" when the player to move may (the board actions share
+    # the rest). Evaluators have no policy output for it.
+    bonus_prior: float = 0.2
 
 
 class Decision:
@@ -81,12 +84,17 @@ class Decision:
         self.w = 0.0  # sum of Black values
         self.score: float | None = None
 
-    def expand(self, ev: Evaluation) -> None:
+    def expand(self, ev: Evaluation, bonus_prior: float = 0.2) -> None:
         acts = np.asarray(self.state.legal_actions(), dtype=np.int64)
         p = ev.priors[acts].astype(np.float64)
         s = p.sum()
+        p = p / s if s > 0 else np.full(len(acts), 1.0 / len(acts))
+        if self.state.can_use_bonus:
+            # choice trigger: spending a bonus now is one more option for the player to move
+            acts = np.append(acts, self.state.config.bonus_action)
+            p = np.append(p * (1.0 - bonus_prior), bonus_prior)
         self.actions = acts
-        self.P = p / s if s > 0 else np.full(len(acts), 1.0 / len(acts))
+        self.P = p
         self.N = np.zeros(len(acts))
         self.W = np.zeros(len(acts))
         self.expanded = True
@@ -184,11 +192,22 @@ class SearchResult:
     actor: int
     size: int
 
+    def best_action(self, temperature: float, rng: random.Random) -> int:
+        """An action chosen from the visit counts (including "use a bonus"): the most visited at
+        temperature 0, else proportionally to visits ** (1 / temperature)."""
+        stats = [s for s in self.stats if s.visits > 0] or self.stats[:1]
+        if temperature <= 0:
+            top = max(s.visits for s in stats)
+            return rng.choice([s.action for s in stats if s.visits == top])
+        w = [s.visits ** (1.0 / temperature) for s in stats]
+        return rng.choices([s.action for s in stats], weights=w)[0]
+
     def policy(self) -> np.ndarray:
         """Visit distribution over the N*N+1 actions (the self-play policy target)."""
         pi = np.zeros(self.size * self.size + 1, dtype=np.float32)
         for s in self.stats:
-            pi[s.action] = s.visits
+            if s.action < len(pi):  # "use a bonus" (choice trigger) is not a board action
+                pi[s.action] = s.visits
         t = pi.sum()
         return pi / t if t > 0 else pi
 
@@ -281,7 +300,7 @@ class Search:
     # ------------------------------------------------------------------ expansion
     def finish(self, leaves: Sequence[Leaf], evals: Sequence[Evaluation]) -> None:
         for leaf, ev in zip(leaves, evals, strict=True):
-            leaf.node.expand(ev)
+            leaf.node.expand(ev, self.params.bonus_prior)
             if leaf.node is self.root and self.params.dirichlet_alpha > 0 and not self._noise_done:
                 self._add_noise()
             self._backup(leaf.path, ev.black_win, leaf.node)
@@ -325,7 +344,9 @@ class Search:
         while len(out) < pv_len:
             a = int(node.actions[i])
             step: dict[str, Any] = {"color": COLOR_NAMES[node.actor], "action": a}
-            if a == n * n:
+            if a == n * n + 1:
+                step.update(pass_=False, bonus=True, x=None, y=None)
+            elif a == n * n:
                 step.update(pass_=True, x=None, y=None)
             else:
                 step.update(pass_=False, x=a % n, y=a // n)

@@ -27,9 +27,14 @@ export function pctText(p: number): string {
   return `${Math.round(p * 100)}%`
 }
 
-/** The public chance that each player's *next* turn is a bonus turn. */
+/** Random trigger: the public chance that each player's *next* turn is a bonus turn. Choice trigger:
+ *  who may use a bonus now. */
 export function chanceText(v: VariantView): string {
   const s = v.state
+  if (s.config.trigger === 'choice') {
+    if (s.canUseBonus) return `${colorName(s.toMove)} may use a bonus now: tap Keep color (Use bonus) before moving.`
+    return 'Players choose when to use bonuses, before the first move of a turn.'
+  }
   const one = (c: 'B' | 'W') => {
     const left = s.eligibleTurnsLeft[c]
     return left > 0 ? `${s.remaining[c]}/${left} (${pctText(s.nextTurnBonusProbability[c])})` : 'none'
@@ -37,17 +42,37 @@ export function chanceText(v: VariantView): string {
   return `Next-turn bonus chance — Black ${one('B')} · White ${one('W')}`
 }
 
-/** Who Keep color holds, and why. In a bonus game the lock only ever comes from a bonus turn. */
-export function lockText(v: VariantView): { on: boolean; label: string; title: string } {
+/** Who Keep color holds, and why. In a bonus game the lock only ever comes from a bonus turn. With the
+ *  choice trigger the button is how a player uses a bonus (``canUse``): before the turn's first move. */
+export function lockText(v: VariantView): { on: boolean; label: string; title: string; canUse: boolean } {
   const s = v.state
+  const who = colorName(s.toMove)
   if (s.phase !== 'terminal' && s.bonusActive)
     return {
       on: true,
-      label: `Keep ${colorName(s.toMove)} · bonus ${s.turnMoves - s.movesLeft + 1}/${s.turnMoves}`,
-      title: `${colorName(s.toMove)} is locked by a bonus turn: ${plural(s.movesLeft, 'move')} left. It releases by itself.`,
+      canUse: false,
+      label: `Keep ${who} · bonus ${s.turnMoves - s.movesLeft + 1}/${s.turnMoves}`,
+      title: `${who} is locked by a bonus turn: ${plural(s.movesLeft, 'move')} left. It releases by itself.`,
+    }
+  if (s.canUseBonus) {
+    const left = s.remaining[s.toMove]
+    return {
+      on: false,
+      canUse: true,
+      label: `Use bonus · ${left} left`,
+      title: `Spend one of ${who}'s ${left} bonus${left === 1 ? '' : 'es'}: ${who} plays ${s.config.moves_per_bonus} moves in a row this turn, and Keep color stays locked until they are used.`,
+    }
+  }
+  if (s.config.trigger === 'choice')
+    return {
+      on: false,
+      canUse: false,
+      label: s.phase === 'terminal' ? 'Keep · game over' : `Keep · ${who} has no bonus`,
+      title: 'A bonus can be used only before the first move of a turn, while the player has one left.',
     }
   return {
     on: false,
+    canUse: false,
     label: 'Keep · bonus only',
     title: 'In Bonus Mode only a bonus turn turns Keep color on. It cannot be switched on by hand.',
   }
@@ -59,7 +84,8 @@ export function announcementText(v: VariantView): string | null {
   if (s.phase !== 'in_turn' || !s.bonusActive || s.movesLeft !== s.turnMoves) return null
   const last = v.events[v.events.length - 1]
   // An imported position starts in its bonus turn without a trigger event: nothing to announce.
-  if (!last || last.type !== 'turn_start' || !last.bonus || last.player !== s.toMove) return null
+  const started = last && ((last.type === 'turn_start' && last.bonus) || last.type === 'bonus_used')
+  if (!started || last.player !== s.toMove) return null
   return `Bonus! ${colorName(s.toMove)} plays ${plural(s.turnMoves, 'move')} in a row this turn.`
 }
 

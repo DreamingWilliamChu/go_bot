@@ -1034,3 +1034,9 @@ video.live {
   color: #c99a00;
   font-weight: 700;
 }
+/* Choice trigger: Keep color is the "Use bonus" button while the player may spend one. */
+.btn.keep-color.use-bonus {
+  background: #ffd84d;
+  color: #3d2e00;
+  border: 2px solid #c99a00;
+}

@@ -19,6 +19,12 @@ class TooLarge(RuntimeError):
     pass
 
 
+def actions(s: VariantState) -> list[int]:
+    """Every option of the player to move, including spending a bonus (choice trigger)."""
+    acts = s.legal_actions()
+    return acts + [s.config.bonus_action] if s.can_use_bonus else acts
+
+
 @dataclass
 class Solution:
     value: float  # Black's win probability under optimal play and the public chance model
@@ -53,7 +59,7 @@ class _Solver:
             if p < 1:
                 v += (1 - p) * self.value(start_turn(s, False))
         else:
-            vals = [self.value(apply_action(s, a)) for a in s.legal_actions()]
+            vals = [self.value(apply_action(s, a)) for a in actions(s)]
             v = max(vals) if s.to_move == BLACK else min(vals)
         self.memo[key] = v
         return v
@@ -64,7 +70,7 @@ def solve(state: VariantState, max_nodes: int = 300_000, tol: float = 1e-9) -> S
         raise ValueError("solve a position with a turn in progress")
     sys.setrecursionlimit(max(sys.getrecursionlimit(), 20_000))  # depth is bounded by the game's cap
     sv = _Solver(max_nodes)
-    action_values = {a: sv.value(apply_action(state, a)) for a in state.legal_actions()}
+    action_values = {a: sv.value(apply_action(state, a)) for a in actions(state)}
     black = state.to_move == BLACK
     target = max(action_values.values()) if black else min(action_values.values())
     best = {a for a, v in action_values.items() if abs(v - target) <= tol}
