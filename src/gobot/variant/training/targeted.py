@@ -101,6 +101,15 @@ def _good_for_mover(rec: dict[str, Any]) -> bool:
     return v >= 0.75 and len(rec["best"]) <= max(1, rec["legal"] // 3)
 
 
+def _discriminates(bonus: dict[str, Any], calm: dict[str, Any]) -> bool:
+    """Choosing well needs the bonus: some move that is best without it is wrong with it."""
+    return bool(set(calm["best"]) - set(bonus["best"])) and len(bonus["best"]) <= max(1, bonus["legal"] // 2)
+
+
+def _mover_value(rec: dict[str, Any]) -> float:
+    return float(rec["value"] if rec["toMove"] == BLACK else 1 - rec["value"])
+
+
 def generate(per_category: int = 6, seed: int = 20261025, budget_s: float = 600.0) -> list[dict[str, Any]]:
     rng = random.Random(seed)
     found: dict[str, list[dict[str, Any]]] = {c: [] for c in CATEGORIES}
@@ -117,21 +126,23 @@ def generate(per_category: int = 6, seed: int = 20261025, budget_s: float = 600.
         try:
             forced = [0, 0]
             forced[oi] = 1
+            calm = _record("no_bonus", b, mover, komi, [0, 0], started)
             surv = _record("survival", b, mover, komi, forced, started)
-            same = _record("same_board", b, mover, komi, [0, 0], started)
-            if set(surv["best"]) != set(same["best"]) and surv["value"] != same["value"]:
-                if _good_for_mover(surv) and len(found["survival"]) < per_category:
-                    found["survival"].append(surv)
-                if _good_for_mover(same) and len(found["same_board"]) < per_category:
-                    found["same_board"].append(same)
-            elif _good_for_mover(same) and len(found["no_bonus"]) < per_category:
-                found["no_bonus"].append({**same, "category": "no_bonus"})
-            three = _record("three_move", b, mover, komi, [0, 0], [2, 2], bonusActive=True, movesLeft=3)
-            normal = _record("three_move", b, mover, komi, [0, 0], [2, 2])
             if (
-                set(three["best"]) != set(normal["best"])
-                and _good_for_mover(three)
-                and three["value"] != normal["value"]
+                _discriminates(surv, calm)
+                and _mover_value(surv) > 0
+                and len(found["survival"]) < per_category
+            ):
+                found["survival"].append(surv)
+                if _discriminates(calm, surv) and len(found["same_board"]) < per_category:
+                    found["same_board"].append({**calm, "category": "same_board"})
+            elif _good_for_mover(calm) and len(found["no_bonus"]) < per_category:
+                found["no_bonus"].append(calm)
+            three = _record("three_move", b, mover, komi, [0, 0], [2, 2], bonusActive=True, movesLeft=3)
+            normal = _record("no_bonus", b, mover, komi, [0, 0], [2, 2])
+            if (
+                _discriminates(three, normal)
+                and _mover_value(three) > _mover_value(normal)
                 and len(found["three_move"]) < per_category
             ):
                 found["three_move"].append(three)
@@ -141,15 +152,28 @@ def generate(per_category: int = 6, seed: int = 20261025, budget_s: float = 600.
                 st = [2, 2]
                 st[oi] = 2  # two eligible turns left: P = 1/2
                 uneq = _record("unequal", b, mover, komi, half, st)
-                if (
-                    0 < uneq["value"] < 1
-                    and uneq["value"] not in (surv["value"], same["value"])
-                    and _good_for_mover_soft(uneq)
-                ):
+                calm2 = _record("no_bonus", b, mover, komi, [0, 0], st)
+                if _discriminates(uneq, calm2) and _mover_value(uneq) > 0:
                     found["unequal"].append(uneq)
         except TooLarge:
             continue
     return [r for c in CATEGORIES for r in found[c]]
+
+
+# Hand-built positions (still solver-verified when added): a White group whose eye space is a
+# straight three. A single Black move at the vital point (1, 0) kills it; three consecutive Black
+# moves capture it outright.
+HANDMADE_ROWS = ["...OX", "OOOOX", "XXXXX", "X.X.X", "XXXXX"]
+
+
+def handmade() -> list[dict[str, Any]]:
+    b = Board.from_rows(HANDMADE_ROWS)
+    return [
+        # Black's certain 3-move bonus is coming: White survives only by taking the vital point now.
+        _record("survival", b, WHITE, 9.5, [1, 0], [3, 3], horizon=HORIZON),
+        # Black has the 3-move bonus now: filling the three liberties captures the group.
+        _record("three_move", b, BLACK, 9.5, [0, 0], [2, 2], bonusActive=True, movesLeft=3, cap=4),
+    ]
 
 
 def _good_for_mover_soft(rec: dict[str, Any]) -> bool:
@@ -180,7 +204,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--budget", type=float, default=600.0)
     a = p.parse_args(argv)
     sys.setrecursionlimit(20000)
-    recs = generate(a.per_category, a.seed, a.budget)
+    recs = handmade() + generate(a.per_category, a.seed, a.budget)
     Path(a.out).write_text(json.dumps({"seed": a.seed, "positions": recs}, indent=1) + "\n")
     counts = {c: sum(1 for r in recs if r["category"] == c) for c in CATEGORIES}
     print(f"wrote {len(recs)} positions to {a.out}: {counts}")
@@ -189,3 +213,99 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+# ---------------------------------------------------------------------- 11x11 versions for trained networks
+# The trained network only knows 11x11. Each 5x5 position is placed in the top-left corner of an 11x11
+# board whose remainder is settled: a Black group (top right, with the wall at x = 5) and a White group
+# (bottom, with the wall at y = 5), each with two single-point eyes. The walls touch the corner
+# position, so the answer is re-solved exactly on the 11x11 board and the position is kept only when
+# the bonus state still changes the correct moves.
+EYES = {(8, 1): BLACK, (8, 4): BLACK, (2, 8): WHITE, (8, 8): WHITE}
+
+
+def embed_rows(rows: list[str], size: int = 11) -> list[str]:
+    grid = [["." for _ in range(size)] for _ in range(size)]
+    for y, row in enumerate(rows):
+        for x, ch in enumerate(row):
+            grid[y][x] = ch
+    for y in range(size):
+        for x in range(size):
+            if x < 5 and y < 5:
+                continue
+            if (x, y) in EYES:
+                continue
+            black = (x >= 5 and y <= 5) and not (y == 5 and x < 5)
+            grid[y][x] = "X" if black else "O"
+    return ["".join(r) for r in grid]
+
+
+def _outside_lead(size: int) -> float:
+    rows = embed_rows(["....."] * 5, size)
+    b = sum(r.count("X") for r in rows) + sum(1 for c in EYES.values() if c == BLACK)
+    w = sum(r.count("O") for r in rows) + sum(1 for c in EYES.values() if c == WHITE)
+    return float(b - w)
+
+
+def embed(rec: dict[str, Any], size: int = 11) -> dict[str, Any]:
+    out = {
+        **rec,
+        "rows": embed_rows(rec["rows"], size),
+        "komi": rec["komi"] + _outside_lead(size),
+        "embedded_from": rec["rows"],
+    }
+    sol = solve(make_state(out), max_nodes=200_000)
+    out.update(best=sorted(sol.best), value=sol.value, legal=len(sol.action_values))
+    return out
+
+
+def embedded_suite(positions: list[dict[str, Any]], size: int = 11) -> list[dict[str, Any]]:
+    """11x11 versions of the suite that still discriminate (the bonus changes the correct moves)."""
+    kept = []
+    for rec in positions:
+        try:
+            e = embed(rec, size)
+            if rec["category"] == "no_bonus":
+                if len(e["best"]) <= max(1, e["legal"] // 3):
+                    kept.append(e)
+                continue
+            calm_rec = {**rec, "remaining": [0, 0], "bonusActive": False, "movesLeft": 1}
+            calm = embed(calm_rec, size)
+            if _discriminates(e, calm):
+                kept.append(e)
+        except TooLarge:
+            continue
+    return kept
+
+
+def embedded_suite_path(root: Path, size: int) -> Path:
+    return root / "tests" / "fixtures" / "variant" / f"targeted_{size}.json"
+
+
+def run_targeted(path: Path, model_path: str, visits: int) -> dict[str, Any]:
+    """Accuracy of the trained network's bonus search (and of its bonus-blind version and the heuristic
+    search) on the 11x11 targeted positions."""
+    from gobot.variant.models.heuristic import HeuristicEvaluator
+    from gobot.variant.models.net_onnx import OnnxEvaluator
+    from gobot.variant.search.mcts import CachedEvaluator, SearchParams, run_search
+
+    positions = json.loads(path.read_text())["positions"]
+    agents = {
+        "bonus search + trained net": (CachedEvaluator(OnnxEvaluator(Path(model_path))), True),
+        "bonus-blind search + net without bonus inputs": (
+            CachedEvaluator(OnnxEvaluator(Path(model_path), blind=True)),
+            False,
+        ),
+        "bonus search + heuristic": (CachedEvaluator(HeuristicEvaluator()), True),
+    }
+    report: dict[str, Any] = {}
+    for name, (ev, aware) in agents.items():
+
+        def choose(st: VariantState, ev: Any = ev, aware: bool = aware) -> int:
+            s = run_search(
+                st, ev, visits=visits, params=SearchParams(batch=4, model_bonuses=aware), rng=random.Random(0)
+            )
+            return s.result().stats[0].action
+
+        report[name] = check_agent(positions, choose)
+    return report

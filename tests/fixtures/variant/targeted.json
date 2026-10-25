@@ -1,0 +1,750 @@
+{
+ "seed": 20261025,
+ "positions": [
+  {
+   "category": "survival",
+   "rows": [
+    "...OX",
+    "OOOOX",
+    "XXXXX",
+    "X.X.X",
+    "XXXXX"
+   ],
+   "toMove": 2,
+   "komi": 9.5,
+   "remaining": [
+    1,
+    0
+   ],
+   "turnsStarted": [
+    3,
+    3
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    1
+   ],
+   "value": 0.0,
+   "legal": 4
+  },
+  {
+   "category": "three_move",
+   "rows": [
+    "...OX",
+    "OOOOX",
+    "XXXXX",
+    "X.X.X",
+    "XXXXX"
+   ],
+   "toMove": 1,
+   "komi": 9.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    2
+   ],
+   "horizon": 4,
+   "cap": 4,
+   "k": 3,
+   "bonusActive": true,
+   "movesLeft": 3,
+   "best": [
+    0,
+    1,
+    2
+   ],
+   "value": 1.0,
+   "legal": 6
+  },
+  {
+   "category": "three_move",
+   "rows": [
+    "X.XXX",
+    "OXOOX",
+    "OOXOO",
+    ".O.OO",
+    "X.OOO"
+   ],
+   "toMove": 1,
+   "komi": -1.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    2
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "bonusActive": true,
+   "movesLeft": 3,
+   "best": [
+    21
+   ],
+   "value": 1.0,
+   "legal": 3
+  },
+  {
+   "category": "three_move",
+   "rows": [
+    "XXXXX",
+    "XOOXO",
+    "OO.XO",
+    "O.OO.",
+    ".OOOX"
+   ],
+   "toMove": 1,
+   "komi": 0.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    2
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "bonusActive": true,
+   "movesLeft": 3,
+   "best": [
+    19
+   ],
+   "value": 1.0,
+   "legal": 2
+  },
+  {
+   "category": "three_move",
+   "rows": [
+    "X.OXX",
+    "OXXXO",
+    "OOOO.",
+    "OOO.O",
+    "O.OXX"
+   ],
+   "toMove": 1,
+   "komi": 3.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    2
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "bonusActive": true,
+   "movesLeft": 3,
+   "best": [
+    14
+   ],
+   "value": 1.0,
+   "legal": 3
+  },
+  {
+   "category": "three_move",
+   "rows": [
+    "..O.X",
+    "XOOOO",
+    "OXOOO",
+    "O.XXO",
+    ".OOXX"
+   ],
+   "toMove": 1,
+   "komi": -0.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    2
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "bonusActive": true,
+   "movesLeft": 3,
+   "best": [
+    1
+   ],
+   "value": 1.0,
+   "legal": 3
+  },
+  {
+   "category": "three_move",
+   "rows": [
+    ".XOOO",
+    "OXXOX",
+    ".OOO.",
+    "OXX.O",
+    "XXXO."
+   ],
+   "toMove": 1,
+   "komi": 2.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    2
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "bonusActive": true,
+   "movesLeft": 3,
+   "best": [
+    10
+   ],
+   "value": 1.0,
+   "legal": 2
+  },
+  {
+   "category": "three_move",
+   "rows": [
+    ".XXXX",
+    "OXOX.",
+    "O.OOX",
+    "XXOXX",
+    "X.X.O"
+   ],
+   "toMove": 2,
+   "komi": -2.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    2
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "bonusActive": true,
+   "movesLeft": 3,
+   "best": [
+    11
+   ],
+   "value": 0.0,
+   "legal": 3
+  },
+  {
+   "category": "same_board",
+   "rows": [
+    "X.X.O",
+    "OOOXO",
+    "O.OOO",
+    "XXXXO",
+    "X.OXX"
+   ],
+   "toMove": 1,
+   "komi": -2.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    3
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    21
+   ],
+   "value": 1.0,
+   "legal": 5
+  },
+  {
+   "category": "same_board",
+   "rows": [
+    "OO.XX",
+    "O.OOX",
+    "XXXX.",
+    "OOXO.",
+    ".OOXX"
+   ],
+   "toMove": 2,
+   "komi": 0.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    3,
+    2
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    19
+   ],
+   "value": 0.0,
+   "legal": 5
+  },
+  {
+   "category": "same_board",
+   "rows": [
+    "OOX.O",
+    "O.XXO",
+    "XX.OO",
+    "OO.XO",
+    "OOXOO"
+   ],
+   "toMove": 1,
+   "komi": -2.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    3
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    17
+   ],
+   "value": 1.0,
+   "legal": 5
+  },
+  {
+   "category": "same_board",
+   "rows": [
+    "XOXXX",
+    "XO.X.",
+    "XX..O",
+    "XXOXO",
+    "XXOXX"
+   ],
+   "toMove": 2,
+   "komi": -2.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    3,
+    2
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    12
+   ],
+   "value": 0.0,
+   "legal": 5
+  },
+  {
+   "category": "same_board",
+   "rows": [
+    "XXX.X",
+    "XOXOX",
+    "OOOXX",
+    "...OX",
+    "XXXO."
+   ],
+   "toMove": 1,
+   "komi": 3.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    3
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    3
+   ],
+   "value": 1.0,
+   "legal": 6
+  },
+  {
+   "category": "same_board",
+   "rows": [
+    ".OOXX",
+    ".O..O",
+    "XXXXX",
+    "X.X.X",
+    "X.OOO"
+   ],
+   "toMove": 2,
+   "komi": 0.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    3,
+    2
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    8
+   ],
+   "value": 0.0,
+   "legal": 8
+  },
+  {
+   "category": "no_bonus",
+   "rows": [
+    "XOXOO",
+    "XOX..",
+    "X.OX.",
+    ".XOX.",
+    "XXOOO"
+   ],
+   "toMove": 1,
+   "komi": 2.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    3
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    8,
+    11
+   ],
+   "value": 1.0,
+   "legal": 7
+  },
+  {
+   "category": "no_bonus",
+   "rows": [
+    "OOXX.",
+    "OOO.X",
+    "XXXOX",
+    "XXOOX",
+    ".OOO."
+   ],
+   "toMove": 1,
+   "komi": -2.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    3
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    8
+   ],
+   "value": 1.0,
+   "legal": 4
+  },
+  {
+   "category": "no_bonus",
+   "rows": [
+    ".X.XX",
+    "OOXXX",
+    "OX.XX",
+    ".OXOO",
+    "OOOOO"
+   ],
+   "toMove": 1,
+   "komi": 0.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    3
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    15
+   ],
+   "value": 1.0,
+   "legal": 5
+  },
+  {
+   "category": "no_bonus",
+   "rows": [
+    "...O.",
+    "OXXOO",
+    "OXOX.",
+    "XXOOX",
+    "X.OOX"
+   ],
+   "toMove": 1,
+   "komi": -0.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    3
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    21
+   ],
+   "value": 1.0,
+   "legal": 5
+  },
+  {
+   "category": "no_bonus",
+   "rows": [
+    "XOOO.",
+    ".OXOX",
+    "OXXOX",
+    "OXO.O",
+    ".XX.X"
+   ],
+   "toMove": 1,
+   "komi": -2.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    3
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    18
+   ],
+   "value": 1.0,
+   "legal": 4
+  },
+  {
+   "category": "no_bonus",
+   "rows": [
+    "OOOXO",
+    "OXO..",
+    "OXX..",
+    "OXXXX",
+    "OXOO."
+   ],
+   "toMove": 2,
+   "komi": 1.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    3,
+    2
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    8
+   ],
+   "value": 0.0,
+   "legal": 5
+  },
+  {
+   "category": "unequal",
+   "rows": [
+    "X.X.O",
+    "OOOXO",
+    "O.OOO",
+    "XXXXO",
+    "X.OXX"
+   ],
+   "toMove": 1,
+   "komi": -2.5,
+   "remaining": [
+    0,
+    1
+   ],
+   "turnsStarted": [
+    2,
+    2
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    21
+   ],
+   "value": 0.5,
+   "legal": 5
+  },
+  {
+   "category": "unequal",
+   "rows": [
+    "OO.XX",
+    "O.OOX",
+    "XXXX.",
+    "OOXO.",
+    ".OOXX"
+   ],
+   "toMove": 2,
+   "komi": 0.5,
+   "remaining": [
+    1,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    2
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    19
+   ],
+   "value": 0.5,
+   "legal": 5
+  },
+  {
+   "category": "unequal",
+   "rows": [
+    "OOX.O",
+    "O.XXO",
+    "XX.OO",
+    "OO.XO",
+    "OOXOO"
+   ],
+   "toMove": 1,
+   "komi": -2.5,
+   "remaining": [
+    0,
+    1
+   ],
+   "turnsStarted": [
+    2,
+    2
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    17
+   ],
+   "value": 0.5,
+   "legal": 5
+  },
+  {
+   "category": "unequal",
+   "rows": [
+    "XOXXX",
+    "XO.X.",
+    "XX..O",
+    "XXOXO",
+    "XXOXX"
+   ],
+   "toMove": 2,
+   "komi": -2.5,
+   "remaining": [
+    1,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    2
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    12
+   ],
+   "value": 0.5,
+   "legal": 5
+  },
+  {
+   "category": "unequal",
+   "rows": [
+    "XXX.X",
+    "XOXOX",
+    "OOOXX",
+    "...OX",
+    "XXXO."
+   ],
+   "toMove": 1,
+   "komi": 3.5,
+   "remaining": [
+    0,
+    1
+   ],
+   "turnsStarted": [
+    2,
+    2
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    3
+   ],
+   "value": 0.5,
+   "legal": 6
+  },
+  {
+   "category": "unequal",
+   "rows": [
+    ".OOXX",
+    ".O..O",
+    "XXXXX",
+    "X.X.X",
+    "X.OOO"
+   ],
+   "toMove": 2,
+   "komi": 0.5,
+   "remaining": [
+    1,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    2
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    8
+   ],
+   "value": 0.5,
+   "legal": 8
+  }
+ ]
+}

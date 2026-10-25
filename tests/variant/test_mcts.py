@@ -88,10 +88,11 @@ def test_certain_outcomes_are_not_branched() -> None:
     none_left = apply_action(state(EMPTY5, BLACK), 12)
     node = make_node(none_left)
     assert isinstance(node, Decision) and not node.state.bonus_active
-    # bonus-blind search assumes no future bonus whenever that is possible
+    # bonus-blind search imagines a game without any further bonus, even a certain one
     mid = apply_action(state(EMPTY5, BLACK, remaining=(0, 1), started=(1, 6)), 12)
     assert isinstance(make_node(mid), Chance)
-    assert isinstance(make_node(mid, model_bonuses=False), Decision)
+    blind = Search(state(EMPTY5, BLACK, remaining=(0, 1), started=(1, 9)), SearchParams(model_bonuses=False))
+    assert blind.root.state.remaining == (0, 0)
 
 
 @pytest.mark.parametrize("mover", [BLACK, WHITE])

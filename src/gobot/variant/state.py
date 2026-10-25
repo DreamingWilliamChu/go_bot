@@ -17,7 +17,7 @@ Phases:
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Literal
+from typing import Any, Literal
 
 from gobot.variant.config import VariantConfig
 from gobot.variant.randomness import check_feasible, trigger_probability
@@ -68,6 +68,8 @@ class VariantState:
     result: Result | None = None
     history_known: bool = True  # False for photo/branch imports: no earlier positions are known
     _legal: list[int] | None = field(default=None, init=False, repr=False)
+    _superko: list[int] | None = field(default=None, init=False, repr=False)
+    memo: dict[str, Any] = field(default_factory=dict, init=False, repr=False, compare=False)  # derived data
 
     # ------------------------------------------------------------------ queries
     @property
@@ -83,10 +85,21 @@ class VariantState:
         """Legal actions for ``to_move`` in this turn: placements, then the pass action (N*N)."""
         if self._legal is None:
             if self.phase != IN_TURN:
-                self._legal = []
+                self._legal, self._superko = [], []
             else:
-                self._legal = self.board.legal_actions(self.to_move, self.seen) + [self.config.pass_action]
+                sk: list[int] = []
+                self._legal = self.board.legal_actions(self.to_move, self.seen, sk) + [
+                    self.config.pass_action
+                ]
+                self._superko = sk
         return self._legal
+
+    def superko_forbidden(self) -> list[int]:
+        """Points ``to_move`` could play but for positional superko."""
+        if self._superko is None:
+            self.legal_actions()
+        assert self._superko is not None
+        return self._superko
 
     def is_legal(self, action: int) -> bool:
         if self.phase != IN_TURN:

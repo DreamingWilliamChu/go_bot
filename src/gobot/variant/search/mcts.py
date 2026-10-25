@@ -28,7 +28,7 @@ import math
 import random
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
@@ -46,8 +46,8 @@ class SearchParams:
     batch: int = 8
     dirichlet_alpha: float = 0.0  # > 0: root noise (self-play only)
     dirichlet_frac: float = 0.25
-    # Chance model for future bonuses. False = "bonus-blind": the search assumes no future bonus ever
-    # triggers (an evaluation baseline); the current turn's moves are still played out correctly.
+    # Chance model for future bonuses. False = "bonus-blind" (an evaluation baseline): the search
+    # imagines that no further bonus can trigger; the current turn's moves are still played out.
     model_bonuses: bool = True
 
 
@@ -143,11 +143,8 @@ Node = Decision | Chance
 def make_node(state: VariantState, model_bonuses: bool = True) -> Node:
     """The node for ``state``: chance at a turn start (unless one outcome is certain)."""
     if state.phase == TURN_START:
-        p = state.trigger_probability(state.to_move) if model_bonuses else 0.0
+        p = state.trigger_probability(state.to_move)
         if p <= 0.0:
-            # bonus-blind search: pretend nothing triggers (only valid if the counts allow it)
-            if not model_bonuses and state.trigger_probability(state.to_move) >= 1.0:
-                return Decision(start_turn(state, True))
             return Decision(start_turn(state, False))
         if p >= 1.0:
             return Decision(start_turn(state, True))
@@ -203,6 +200,10 @@ class Search:
         if root.phase == TURN_START:
             raise ValueError("search starts from a resolved turn (in_turn), never from a pending turn start")
         self.params = params or SearchParams()
+        if not self.params.model_bonuses:
+            # Bonus-blind baseline: imagine a game in which no further bonus can ever trigger. The
+            # current turn is played out as it is; every action chosen is legal in the real game.
+            root = replace(root, remaining=(0, 0))
         self.rng = rng or random.Random()
         self.root = Decision(root)
         self.started = time.monotonic()

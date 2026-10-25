@@ -296,8 +296,11 @@ class Board:
             raise IllegalMove("superko", "Superko: that would repeat an earlier position.")
         return Board(geo, cells, h), n_cap
 
-    def legal_actions(self, color: int, seen: frozenset[int] | set[int]) -> list[int]:
-        """Legal placements for ``color`` (passes are always legal and not included)."""
+    def legal_actions(
+        self, color: int, seen: frozenset[int] | set[int], superko_out: list[int] | None = None
+    ) -> list[int]:
+        """Legal placements for ``color`` (passes are always legal and not included). Points that are
+        only forbidden by superko are appended to ``superko_out`` when it is given."""
         geo = self.geo
         cells = self.cells
         neigh = geo.neigh
@@ -325,10 +328,15 @@ class Board:
                             h ^= ch.hashes[k]
                 if h not in seen:
                     out.append(a)
+                elif superko_out is not None:
+                    superko_out.append(a)
                 continue
             rh = self.result_hash(a, color)
-            if rh is not None and rh not in seen:
-                out.append(a)
+            if rh is not None:
+                if rh not in seen:
+                    out.append(a)
+                elif superko_out is not None:
+                    superko_out.append(a)
         return out
 
     def superko_forbidden(self, color: int, seen: frozenset[int] | set[int]) -> list[int]:
