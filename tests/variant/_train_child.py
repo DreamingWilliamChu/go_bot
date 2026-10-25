@@ -37,8 +37,10 @@ data = Batch(
     np.full(n, np.nan, np.float32),
     np.zeros(n, np.int8),
 )
-print("training", flush=True)
 try:
+    # some steps before the parent may interrupt: a fast runner's SIGINT otherwise lands before step 1
+    tr.train_steps(data, 5)
+    print("training", flush=True)
     while True:
         tr.train_steps(data, 5)
 except StopRequested:
