@@ -182,7 +182,6 @@ def run_games(
             pi = res.policy()
             pl = g.player()
             temp = 1.0 if g.env.state.placements < pl.temperature_moves else 0.0
-            # chosen over every option, including "use a bonus" (choice trigger), which is not in pi
             a = res.best_action(temp, g.rng) if res.stats else g.env.state.config.pass_action
             if g.record and g.full:
                 g.samples.append(Sample(raw_from_state(g.env.state), pi, g.env.state.to_move))

@@ -15,8 +15,9 @@ export interface VariantConfig {
   max_placements: number | null
 }
 
-/** choice: the player to move decides to use a bonus before the first move of a turn; random: hidden schedule. */
-export type Trigger = 'choice' | 'random'
+/** judge: an outside judge grants bonuses at turn starts (to players and the program their timing is
+ *  random, modelled over personal turns 1–H); random: the Mac's hidden schedule. */
+export type Trigger = 'judge' | 'random'
 
 export interface ScoreResult {
   black_stones: number
@@ -57,14 +58,14 @@ export interface VariantState {
   lastPlacement: { x: number; y: number; color: Color } | null
   historyKnown: boolean
   legal: number[]
-  canUseBonus: boolean // choice trigger: the player to move may use a bonus now
+  canGrantBonus: boolean // judge trigger: the judge may grant the player to move a bonus now
   result: GameResult | null
 }
 
 export type VariantEvent =
   | { type: 'turn_start'; player: Color; turnIndex: number; bonus: boolean; moves: number; probability: number }
   | { type: 'move'; player: Color; x?: number; y?: number; pass?: true; captured?: number; turnEnded: boolean }
-  | { type: 'bonus_used'; player: Color; turnIndex: number; moves: number }
+  | { type: 'bonus_granted'; player: Color; turnIndex: number; moves: number }
   | ({ type: 'game_end' } & GameResult)
 
 export interface VariantView {
@@ -99,7 +100,7 @@ export function horizonFor(p: Pick<BonusPrefs, 'size' | 'horizon'>): number {
 }
 
 export const DEFAULT_BONUS_PREFS: BonusPrefs = {
-  trigger: 'choice',
+  trigger: 'judge',
   size: 11,
   komi: 7.5,
   blackBonuses: 3,

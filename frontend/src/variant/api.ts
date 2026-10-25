@@ -11,13 +11,13 @@ export class StaleGame extends Error {
 export type VariantAction =
   | { type: 'place'; x: number; y: number }
   | { type: 'pass' }
-  | { type: 'bonus' } // choice trigger: use a bonus on this turn
+  | { type: 'bonus' } // judge trigger: the judge grants a bonus on this turn
   | { type: 'undo' }
   | { type: 'redo' }
 
 function configBody(p: BonusPrefs) {
   return {
-    trigger: p.trigger ?? 'choice',
+    trigger: p.trigger === 'random' ? 'random' : 'judge',
     size: p.size,
     komi: p.komi,
     black_bonuses: p.blackBonuses,

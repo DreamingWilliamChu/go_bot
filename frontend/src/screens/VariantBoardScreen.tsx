@@ -156,7 +156,7 @@ export function VariantBoardScreen(p: Props) {
         <div class="game-line small">
           <span>
             {cfg.size}×{cfg.size} · chinese · komi {cfg.komi} · {cfg.moves_per_bonus} moves per bonus ·{' '}
-            {cfg.trigger === 'choice' ? 'bonuses by choice' : `random bonuses, H ${cfg.horizon}`}
+            {cfg.trigger === 'judge' ? `bonuses by the judge (modelled over H ${cfg.horizon})` : `random bonuses, H ${cfg.horizon}`}
           </span>
           <span>
             Move {s.placements} · captures B {s.captures.B} / W {s.captures.W}
@@ -186,7 +186,7 @@ export function VariantBoardScreen(p: Props) {
               p.toast(
                 lock.on
                   ? `${lock.title} Taps cannot change it.`
-                  : cfg.trigger === 'choice'
+                  : cfg.trigger === 'judge'
                     ? `${lock.title} For an unlimited manual Keep, turn Bonus Mode off.`
                     : 'Bonus Mode: Keep color turns on only for a bonus turn. For an unlimited manual Keep, turn Bonus Mode off.',
               )

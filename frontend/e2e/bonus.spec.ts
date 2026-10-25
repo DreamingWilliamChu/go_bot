@@ -21,7 +21,7 @@ async function noHorizontalOverflow(page: Page) {
 
 async function newBonusGame(
   page: Page,
-  opts: { size?: number; black: number; white: number; horizon?: number; trigger?: 'random' | 'choice' },
+  opts: { size?: number; black: number; white: number; horizon?: number; trigger?: 'random' | 'judge' },
 ) {
   await page.getByTestId('bonus-mode').click()
   await expect(page.getByTestId('bonus-entry-dialog')).toBeVisible()
@@ -159,13 +159,21 @@ test('Engine tab lists bonus-variant networks with their provenance', async ({ p
   await expect(page.getByTestId('bonus-networks')).toContainText('Bonus-variant networks')
 })
 
-test('you choose: Keep color uses a bonus before the first move, then locks for three moves', async ({ page }) => {
-  await newBonusGame(page, { size: 9, black: 2, white: 1, trigger: 'choice' })
+test('judge: Keep color grants a bonus before the first move; analysis never suggests one', async ({ page }) => {
+  await newBonusGame(page, { size: 9, black: 2, white: 1, trigger: 'judge' })
   const keep = page.getByTestId('keep-color')
-  // nothing is random: the turn starts normal, and the player may spend a bonus
+  // nothing happens by itself: the turn starts normal and the judge may grant a bonus
   await expect(page.getByTestId('bonus-turn')).toContainText('Black to play — normal turn (1 move)')
-  await expect(keep).toHaveText('Use bonus · 2 left')
-  await expect(page.getByTestId('bonus-chance')).toContainText('Black may use a bonus now')
+  await expect(keep).toHaveText('Judge: grant bonus · 2 left')
+  // to the players and the analysis the judge's timing is random: a modelled chance is shown
+  await expect(page.getByTestId('bonus-chance')).toContainText('The judge decides; modelled next-turn chance — Black 2/19')
+  // and the bonus search never lists a bonus among its moves
+  await page.getByRole('radio', { name: /Quick/ }).click()
+  await page.getByTestId('source-heuristic').click()
+  await page.getByTestId('analyze').click()
+  await expect(page.getByTestId('analysis-source')).toHaveText('Bonus search', { timeout: 60_000 })
+  await expect(page.getByTestId('candidates')).not.toContainText(/bonus/i)
+  await expect(page.getByTestId('analysis-footnote')).toContainText('outside judge grants the bonuses')
   await keep.click()
   await expect(page.getByTestId('bonus-announcement')).toHaveText('Bonus! Black plays 3 moves in a row this turn.')
   await expect(page.getByTestId('bonuses-left')).toHaveText('Bonuses left — Black: 1 · White: 1')
@@ -178,15 +186,12 @@ test('you choose: Keep color uses a bonus before the first move, then locks for 
   await tapPoint(page, 9, 3, 2)
   await tapPoint(page, 9, 4, 2)
   await expect(page.getByTestId('bonus-turn')).toContainText('White to play — normal turn (1 move)')
-  await expect(keep).toHaveText('Use bonus · 1 left')
-  // White plays a normal move instead; Black may use its last bonus next turn
-  await tapPoint(page, 9, 6, 6)
-  await expect(keep).toHaveText('Use bonus · 1 left')
-  await tapPoint(page, 9, 2, 6) // Black: normal move, keeps the bonus
-  await expect(page.getByTestId('bonuses-left')).toHaveText('Bonuses left — Black: 1 · White: 1')
-  // undo restores the spent bonus exactly
-  for (let i = 0; i < 6; i++) await page.getByRole('button', { name: 'Undo' }).click()
+  await expect(keep).toHaveText('Judge: grant bonus · 1 left')
+  await tapPoint(page, 9, 6, 6) // no bonus for White this time
+  await expect(keep).toHaveText('Judge: grant bonus · 1 left')
+  // undo restores the granted bonus exactly
+  for (let i = 0; i < 5; i++) await page.getByRole('button', { name: 'Undo' }).click()
   await expect(page.getByTestId('bonuses-left')).toHaveText('Bonuses left — Black: 2 · White: 1')
-  await expect(keep).toHaveText('Use bonus · 2 left')
+  await expect(keep).toHaveText('Judge: grant bonus · 2 left')
   await noHorizontalOverflow(page)
 })

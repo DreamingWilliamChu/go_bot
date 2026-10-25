@@ -35,6 +35,11 @@ function loadBonusPrefs(): BonusPrefs {
   return wasDefault ? { ...old, blackBonuses: 3, whiteBonuses: 3 } : old
 }
 
+// Settings saved while the judge trigger was called "choice" ("you choose").
+function withTrigger(p: BonusPrefs): BonusPrefs {
+  return (p.trigger as string) === 'choice' ? { ...p, trigger: 'judge' } : p
+}
+
 // A position without history waiting for its bonus state (photo, or a branch of the standard game).
 interface PendingImport {
   setup: Setup
@@ -121,7 +126,7 @@ export function App() {
   const [auth, setAuth] = useState<AuthInfo | null>(null)
   const toastTimer = useRef<number | undefined>(undefined)
   const [session, setSessionState] = useState<Session>(loadSession)
-  const [bonusPrefs, setBonusPrefsState] = useState<BonusPrefs>(loadBonusPrefs)
+  const [bonusPrefs, setBonusPrefsState] = useState<BonusPrefs>(() => withTrigger(loadBonusPrefs()))
   const [lastBonusGame, setLastBonusGame] = useState<string | null>(() => loadRaw<{ id: string }>('gobot.bonusLast.v1')?.id ?? null)
   const [entryOpen, setEntryOpen] = useState(false)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)

@@ -12,8 +12,8 @@ DEFAULT_HORIZON = {9: 20, 11: 30, 13: 45, 19: 90}
 DEFAULT_BONUSES = 3  # per player
 DEFAULT_MOVES_PER_BONUS = 3
 MAX_SIZE = 25  # GTP letters; the web API restricts sizes further (go.coords.SUPPORTED_SIZES)
-MAX_CHOICE_BONUSES = 50
-Trigger = Literal["random", "choice"]
+MAX_JUDGE_BONUSES = 50
+Trigger = Literal["random", "judge"]
 
 
 def default_horizon(size: int) -> int:
@@ -31,16 +31,19 @@ class VariantConfig(BaseModel):
     black_bonuses: int = Field(default=DEFAULT_BONUSES, ge=0)
     white_bonuses: int = Field(default=DEFAULT_BONUSES, ge=0)
     moves_per_bonus: int = Field(default=DEFAULT_MOVES_PER_BONUS, ge=2, le=9)
-    # random: hidden schedule over personal turns 1..H (docs/BONUS_GO.md §4)
-    # choice: the player to move decides, before the first move of a turn, to spend a bonus (§4a)
+    # random: the Mac's hidden schedule over personal turns 1..H (docs/BONUS_GO.md §4)
+    # judge: an outside judge grants bonuses at turn starts; players and the program treat the timing as
+    #        random, modelled over personal turns 1..H (§4a)
     trigger: Trigger = "random"
-    horizon: int = Field(default=0, ge=0, le=1000)  # 0 / missing: default for the board size (random only)
+    horizon: int = Field(default=0, ge=0, le=1000)  # 0 / missing: default for the board size
     # Self-play / search only: stop after this many placements and mark the game truncated.
     max_placements: int | None = Field(default=None, ge=1)
 
     @model_validator(mode="before")
     @classmethod
     def _default_horizon(cls, data: object) -> object:
+        if isinstance(data, dict) and data.get("trigger") == "choice":
+            data = {**data, "trigger": "judge"}  # records from before the judge trigger was named
         if isinstance(data, dict) and not data.get("horizon"):
             size = data.get("size", 11)
             if isinstance(size, int):
@@ -56,8 +59,8 @@ class VariantConfig(BaseModel):
         for name, n in (("black_bonuses", self.black_bonuses), ("white_bonuses", self.white_bonuses)):
             if self.trigger == "random" and n > self.horizon:
                 raise ValueError(f"{name} ({n}) must be between 0 and the horizon H ({self.horizon})")
-            if self.trigger == "choice" and n > MAX_CHOICE_BONUSES:
-                raise ValueError(f"{name} ({n}) must be between 0 and {MAX_CHOICE_BONUSES}")
+            if self.trigger == "judge" and n > MAX_JUDGE_BONUSES:
+                raise ValueError(f"{name} ({n}) must be between 0 and {MAX_JUDGE_BONUSES}")
         return self
 
     def allocation(self, player: int) -> int:
@@ -74,8 +77,8 @@ class VariantConfig(BaseModel):
 
     @property
     def bonus_action(self) -> int:
-        """Choice trigger only: "spend a bonus now" (before the first move of a turn). Not a board
-        action, so it is outside the network's N*N+1 policy."""
+        """Judge trigger only: the judge grants a bonus on this turn (before its first move). Not a
+        player's move: the search never chooses it, and it is outside the network's policy."""
         return self.size * self.size + 1
 
     def public(self) -> dict[str, object]:

@@ -7,7 +7,7 @@ export interface LockButton {
   label: string
   title: string
   readOnly?: boolean // Bonus Mode: only a bonus turn turns it on
-  action?: boolean // choice trigger: tapping it uses a bonus now
+  action?: boolean // judge trigger: tapping it grants a bonus now (for the judge)
   onClick: () => void
 }
 

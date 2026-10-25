@@ -50,8 +50,6 @@ def rules_info(state: VariantState) -> dict[str, Any]:
 
 
 def _gtp(step: dict[str, Any], n: int) -> str:
-    if step.get("bonus"):
-        return "bonus"
     return "pass" if step.get("pass_") else xy_to_gtp(step["x"], step["y"], n)
 
 
@@ -71,8 +69,7 @@ def result_json(
     for i, s in enumerate(res.stats[:TOP_N]):
         if s.visits == 0:
             continue
-        bonus = s.action == n * n + 1  # choice trigger: "use a bonus now"
-        x, y = (None, None) if s.action >= n * n else (s.action % n, s.action // n)
+        x, y = (None, None) if s.action == n * n else (s.action % n, s.action // n)
         pv = []
         for step in s.pv:
             out = {
@@ -84,16 +81,13 @@ def result_json(
             }
             if "turnStart" in step:
                 out["turnStart"] = step["turnStart"]
-            if step.get("bonus"):
-                out["bonus"] = True
             pv.append(out)
         cands.append(
             {
-                "gtp": "bonus" if bonus else "pass" if x is None else xy_to_gtp(x, y, n),  # type: ignore[arg-type]
+                "gtp": "pass" if x is None else xy_to_gtp(x, y, n),  # type: ignore[arg-type]
                 "x": x,
                 "y": y,
-                "pass": x is None and not bonus,
-                "bonus": bonus,
+                "pass": x is None,
                 "order": i,
                 "visits": s.visits,
                 "blackWinrate": s.black_win if s.black_win is not None else res.root_black_win,
@@ -129,21 +123,21 @@ def result_json(
     }
 
 
-CHOICE_NOTE = (
-    " In this game players choose when to use their bonuses; the search treats that as a decision for "
-    "both players. Its evaluators do not value a bonus kept for later, so advice on *when* to use one is "
-    "approximate."
+JUDGE_NOTE = (
+    " In this game an outside judge grants the bonuses; to the players and the program their timing is "
+    "random, modelled as spread evenly over each player's personal turns 1-H. The search treats future "
+    "bonuses of both players as chance events with that public probability and never suggests one."
 )
 
 
 def label_for_rules(evaluator: dict[str, Any], state: VariantState) -> dict[str, Any]:
-    """A network trained on random bonuses is outside its training rules in a choice game."""
-    if state.config.trigger != "choice":
+    """Judge games are modelled as random: say so, and a network is only as good as that model."""
+    if state.config.trigger != "judge":
         return evaluator
-    out = {**evaluator, "note": (evaluator.get("note") or "") + CHOICE_NOTE}
+    out = {**evaluator, "note": (evaluator.get("note") or "") + JUDGE_NOTE}
     if str(evaluator.get("kind", "")).startswith("variant-net"):
         out["approximate"] = True
-        out["note"] = "Trained on games with random bonuses, so approximate here." + out["note"]
+        out["note"] = "Trained on the Mac's random schedule; a judge's timing may differ." + out["note"]
     return out
 
 

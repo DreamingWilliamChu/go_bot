@@ -47,6 +47,7 @@ def test_search_models_and_observation_never_import_hidden_modules() -> None:
                 "gobot.variant.randomness",
                 "gobot.variant.randomness.check_feasible",
                 "gobot.variant.randomness.trigger_probability",
+                "gobot.variant.randomness.modelled_probability",
             }
         assert not bad, f"{f.relative_to(PKG)} imports {bad}"
 

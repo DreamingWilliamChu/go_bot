@@ -65,12 +65,12 @@ class Environment:
         after = apply_action(before, action)
         n = before.config.size
         if action == before.config.bonus_action:
-            # choice trigger: the player decided to spend a bonus on this turn (announced before a move)
+            # judge trigger: the judge granted a bonus on this turn (announced before a move)
             self.state = after
             self.actions.append(action)
             self.events.append(
                 {
-                    "type": "bonus_used",
+                    "type": "bonus_granted",
                     "player": COLOR_NAMES[before.to_move],
                     "turnIndex": before.turns_started[before.to_move - 1],
                     "moves": after.moves_left,
@@ -121,8 +121,8 @@ class VariantGame:
     def new(cls, config: VariantConfig, seed: int | None = None) -> VariantGame:
         seed = secrets.randbits(63) if seed is None else seed
         rng = random.Random(seed)
-        if config.trigger == "choice":
-            schedule = HiddenSchedule(frozenset(), frozenset())  # nothing random: players choose
+        if config.trigger == "judge":
+            schedule = HiddenSchedule(frozenset(), frozenset())  # the judge decides; the Mac draws nothing
         else:
             schedule = sample_schedule(config.black_bonuses, config.white_bonuses, config.horizon, rng)
         return cls(initial_state(config), schedule, seed, salt=f"{rng.getrandbits(128):032x}")
@@ -133,7 +133,7 @@ class VariantGame:
         its conditional distribution."""
         seed = secrets.randbits(63) if seed is None else seed
         rng = random.Random(seed)
-        if state.config.trigger == "choice":
+        if state.config.trigger == "judge":
             schedule = HiddenSchedule(frozenset(), frozenset())
         else:
             schedule = sample_conditional(state.remaining, state.turns_started, state.config.horizon, rng)

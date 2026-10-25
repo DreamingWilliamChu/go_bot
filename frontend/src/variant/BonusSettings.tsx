@@ -18,8 +18,8 @@ function clampInt(text: string, lo: number, hi: number): number | null {
 export function BonusSettings({ value, onChange, idPrefix = 'bs' }: Props) {
   const [komiText, setKomiText] = useState(String(value.komi))
   const h = horizonFor(value)
-  const choice = value.trigger === 'choice'
-  const limit = choice ? MAX_CHOICE_BONUSES : h
+  const judge = value.trigger === 'judge'
+  const limit = judge ? MAX_JUDGE_BONUSES : h
   const tooMany = value.blackBonuses > limit || value.whiteBonuses > limit
 
   const num = (label: string, key: 'blackBonuses' | 'whiteBonuses', testid: string) => (
@@ -47,8 +47,8 @@ export function BonusSettings({ value, onChange, idPrefix = 'bs' }: Props) {
         <div class="seg" role="radiogroup" aria-label="Who decides bonus turns">
           {(
             [
-              ['choice', 'You choose'],
-              ['random', 'Random'],
+              ['judge', 'Judge decides'],
+              ['random', 'Random (the Mac)'],
             ] as const
           ).map(([t, label]) => (
             <button
@@ -118,9 +118,10 @@ export function BonusSettings({ value, onChange, idPrefix = 'bs' }: Props) {
           ))}
         </div>
       </fieldset>
-      {choice ? null : (
-        <label class="field">
-          Horizon H: bonuses fall on random personal turns 1–H
+      <label class="field">
+          {judge
+            ? 'Horizon H: the analysis models the judge’s bonuses as random personal turns 1–H'
+            : 'Horizon H: bonuses fall on random personal turns 1–H'}
           <input
             type="number"
             inputMode="numeric"
@@ -137,15 +138,16 @@ export function BonusSettings({ value, onChange, idPrefix = 'bs' }: Props) {
             }}
           />
         </label>
-      )}
       {tooMany ? (
         <p class="note error small">
-          Each allocation must be between 0 and {choice ? MAX_CHOICE_BONUSES : `H (${h})`}.
+          Each allocation must be between 0 and {judge ? MAX_JUDGE_BONUSES : `H (${h})`}.
         </p>
-      ) : choice ? (
+      ) : judge ? (
         <p class="muted tiny">
-          Each player decides when to use a bonus: before the first move of a turn, tap Keep color (Use bonus). The
-          player then makes {value.movesPerBonus} moves in a row. Unused bonuses lapse when the game ends.
+          A judge decides when bonuses happen: before the first move of a turn, the judge taps Keep color (Grant
+          bonus). The player then makes {value.movesPerBonus} moves in a row. Neither the players nor the analysis
+          choose bonuses: the analysis treats them as random, spread over each player's personal turns 1–{h}. Unused
+          bonuses lapse when the game ends.
         </p>
       ) : (
         <p class="muted tiny">
@@ -157,9 +159,9 @@ export function BonusSettings({ value, onChange, idPrefix = 'bs' }: Props) {
   )
 }
 
-export const MAX_CHOICE_BONUSES = 50
+export const MAX_JUDGE_BONUSES = 50
 
 export function bonusPrefsValid(p: BonusPrefs): boolean {
-  const limit = p.trigger === 'choice' ? MAX_CHOICE_BONUSES : horizonFor(p)
+  const limit = p.trigger === 'judge' ? MAX_JUDGE_BONUSES : horizonFor(p)
   return validKomi(p.komi) && p.blackBonuses <= limit && p.whiteBonuses <= limit
 }

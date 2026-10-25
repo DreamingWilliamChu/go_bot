@@ -1,5 +1,6 @@
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 
 from gobot.app import create_app
@@ -190,29 +191,31 @@ def test_open_an_export_keeps_the_history(tmp_settings) -> None:
         assert w["events"] == v["events"]
 
 
-def test_new_games_default_to_player_chosen_bonuses(tmp_settings) -> None:
+def test_new_games_default_to_judge_granted_bonuses(tmp_settings) -> None:
     with client(tmp_settings) as c:
         v = c.post(
             "/api/variant/games", json={"config": {"size": 9, "black_bonuses": 2, "white_bonuses": 1}}
         ).json()
         s = v["state"]
-        assert s["config"]["trigger"] == "choice" and s["canUseBonus"] and not s["bonusActive"]
-        assert s["nextTurnBonusProbability"] == {"B": 0.0, "W": 0.0}
-        v = act(c, v, type="bonus")
+        assert s["config"]["trigger"] == "judge" and s["canGrantBonus"] and not s["bonusActive"]
+        # to the players and the program the judge's timing is random: the public model r / max(H - t, r)
+        assert s["nextTurnBonusProbability"]["B"] == pytest.approx(2 / 19)
+        assert s["nextTurnBonusProbability"]["W"] == pytest.approx(1 / 20)
+        v = act(c, v, type="bonus")  # the judge grants Black a bonus
         s = v["state"]
         assert (
             s["bonusActive"]
             and s["movesLeft"] == 3
             and s["remaining"] == {"B": 1, "W": 1}
-            and not s["canUseBonus"]
+            and not s["canGrantBonus"]
         )
-        assert v["newEvents"] == [{"type": "bonus_used", "player": "B", "turnIndex": 1, "moves": 3}]
+        assert v["newEvents"] == [{"type": "bonus_granted", "player": "B", "turnIndex": 1, "moves": 3}]
         for x in (0, 1, 2):
             v = act(c, v, type="place", x=x, y=0)
-        assert v["state"]["toMove"] == "W" and v["state"]["canUseBonus"]
-        v = act(c, v, type="bonus")  # White spends its only bonus
+        assert v["state"]["toMove"] == "W" and v["state"]["canGrantBonus"]
+        v = act(c, v, type="bonus")  # and White's only one
         v = act(c, v, type="place", x=8, y=8)
-        # mid-turn: a bonus can never be added to or extended
+        # mid-turn a bonus can never be added to or extended
         r = c.post(
             f"/api/variant/games/{v['gameId']}/actions",
             json={"expectedRevision": v["revision"], "action": {"type": "bonus"}},
@@ -220,7 +223,13 @@ def test_new_games_default_to_player_chosen_bonuses(tmp_settings) -> None:
         assert r.status_code == 400 and r.json()["detail"]["reason"] == "bonus"
         v = act(c, v, type="undo")
         v = act(c, v, type="undo")
-        assert v["state"]["remaining"] == {"B": 1, "W": 1} and v["state"]["canUseBonus"]
+        assert v["state"]["remaining"] == {"B": 1, "W": 1} and v["state"]["canGrantBonus"]
+
+
+def test_old_choice_records_load_as_judge_games(tmp_settings) -> None:
+    from gobot.variant.config import VariantConfig
+
+    assert VariantConfig(size=9, trigger="choice").trigger == "judge"  # type: ignore[arg-type]
 
 
 def test_default_allocation_is_three_bonuses_each(tmp_settings) -> None:

@@ -40,7 +40,7 @@ def encode_action(action: int, size: int) -> list[int] | str:
     if action == size * size:
         return "pass"
     if action == size * size + 1:
-        return "bonus"  # choice trigger: spend a bonus on this turn
+        return "bonus"  # judge trigger: the judge granted a bonus on this turn
     return [action % size, action // size]
 
 
@@ -198,8 +198,8 @@ def game_from_export(d: dict[str, Any], seed: int | None = None) -> VariantGame:
         s = probe.state
         seed = secrets.randbits(63) if seed is None else seed
         rng = random.Random(seed)
-        if config.trigger == "choice":
-            schedule = HiddenSchedule(frozenset(), frozenset())  # players choose: nothing to draw
+        if config.trigger == "judge":
+            schedule = HiddenSchedule(frozenset(), frozenset())  # the judge decides: nothing to draw
         else:
             future = sample_conditional(s.remaining, s.turns_started, config.horizon, rng)
             schedule = HiddenSchedule(

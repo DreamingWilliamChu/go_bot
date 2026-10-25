@@ -36,6 +36,16 @@ def trigger_probability(remaining: int, turns_started: int, horizon: int) -> flo
     return remaining / eligible
 
 
+def modelled_probability(remaining: int, turns_started: int, horizon: int) -> float:
+    """Judge trigger: the public model of an outside judge's timing. The judge's remaining bonuses are
+    treated as random, spread uniformly over the player's personal turns up to H: P = r / (H - t). A
+    judge may keep bonuses past H; the model then expects them on the next turns: P = r / max(H - t, r),
+    which is 1 once the turns left before H run out."""
+    if remaining <= 0:
+        return 0.0
+    return remaining / max(horizon - turns_started, remaining)
+
+
 def check_feasible(remaining: int, turns_started: int, horizon: int) -> None:
     trigger_probability(remaining, turns_started, horizon)
 

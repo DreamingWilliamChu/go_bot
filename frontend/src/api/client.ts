@@ -7,7 +7,6 @@ export interface PvStep {
   pass: boolean
   color: 'B' | 'W'
   visits?: number
-  bonus?: boolean // bonus search, choice trigger: "use a bonus now" (not a board point)
   // Bonus search: the next player's turn starts after this move (bonus = the outcome the line follows).
   turnStart?: { player: 'B' | 'W'; bonus: boolean; probability: number | null }
 }
@@ -21,7 +20,6 @@ export interface Candidate {
   visits: number
   blackWinrate: number
   blackScoreLead: number | null // null: the evaluator has no score estimate
-  bonus?: boolean // choice trigger: the candidate is "use a bonus now"
   prior: number
   lcb: number | null
   pv: PvStep[]

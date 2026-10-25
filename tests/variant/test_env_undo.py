@@ -84,12 +84,12 @@ def test_random_games_replay_deterministically_from_the_seed() -> None:
     assert snapshot(a) == snapshot(b)
 
 
-def test_choice_bonus_undo_redo_and_records() -> None:
+def test_judge_bonus_undo_redo_and_records() -> None:
     import json
 
     from gobot.variant.serialization import game_from_json, game_to_json
 
-    g = VariantGame.new(VariantConfig(size=5, black_bonuses=1, white_bonuses=1, trigger="choice"), seed=1)
+    g = VariantGame.new(VariantConfig(size=5, black_bonuses=1, white_bonuses=1, trigger="judge"), seed=1)
     bonus = g.state.config.bonus_action
     g.play(bonus)
     g.play(0)

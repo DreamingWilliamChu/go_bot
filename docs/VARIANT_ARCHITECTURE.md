@@ -74,9 +74,9 @@ in_turn ────────────────────────
   from that side; nothing is negated per move;
 - chance outcomes use stratified selection so visit shares follow the public probability; the reported value of
   a move followed by a chance node is the probability-weighted value of its outcomes;
-- in games where players choose their bonuses (trigger `choice`) there are no chance nodes: "use a bonus now"
-  (action N²+1, outside the network's N²+1 policy) is one more option of the player to move at the start of a turn,
-  with prior `bonus_prior` (0.2), and the opponent's later bonus decisions are searched the same way;
+- a bonus is never a move of the search: in games where a judge grants bonuses (trigger `judge`) future turn starts
+  are chance nodes too, with the public model of the judge, P = r / max(H − t, r); the judge's grant (action N²+1)
+  exists only for the game itself, never in the tree;
 - exact scores at terminal states; priors over every legal move;
 - evaluation cache keyed by the evaluator's exact inputs (`features.raw_key` for networks: board, recent
   placements, superko and legal masks, every bonus counter, komi), so the same stones with different bonus

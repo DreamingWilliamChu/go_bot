@@ -34,7 +34,7 @@ export function BonusStateDialog(p: Props) {
   const [passStreak, setPassStreak] = useState(0)
 
   const problems: string[] = []
-  for (const c of p.prefs.trigger === 'choice' ? [] : (['B', 'W'] as const)) {
+  for (const c of p.prefs.trigger === 'judge' ? [] : (['B', 'W'] as const)) {
     const eligible = h - turns[c]
     if (remaining[c] > Math.max(0, eligible))
       problems.push(`${colorName(c)}: ${remaining[c]} bonuses left but only ${Math.max(0, eligible)} eligible turns remain (H ${h} − ${turns[c]} started).`)

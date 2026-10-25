@@ -3,8 +3,9 @@
 * **Decision node**: the player to move (``actor``) chooses one legal action (placement or pass). The
   same player stays the actor for every move of a bonus turn; the actor changes only when a turn ends.
 * **Chance node**: a turn just ended and the next player's turn starts; it is a bonus turn with the
-  *public* probability ``r / (H - t)`` (``VariantState.trigger_probability``), never with the hidden
-  schedule (the search only ever receives an ``Observation``). Outcomes with probability 0 or 1 are not
+  *public* probability (``VariantState.trigger_probability``): ``r / (H - t)`` for the Mac's random
+  schedule, or the same model of an outside judge's timing for judge-granted bonuses. Never the hidden
+  schedule (the search only ever receives an ``Observation``), and never a player's decision. Outcomes with probability 0 or 1 are not
   branched. Chance outcomes are chosen by stratified selection - the outcome whose visit share lags its
   probability the most - so visit shares follow the probabilities instead of being picked like actions.
 * **Values** are Black's win probability in [0, 1] everywhere. A decision node's actor maximises its
@@ -49,9 +50,6 @@ class SearchParams:
     # Chance model for future bonuses. False = "bonus-blind" (an evaluation baseline): the search
     # imagines that no further bonus can trigger; the current turn's moves are still played out.
     model_bonuses: bool = True
-    # Choice trigger: prior of "use a bonus now" when the player to move may (the board actions share
-    # the rest). Evaluators have no policy output for it.
-    bonus_prior: float = 0.2
 
 
 class Decision:
@@ -84,17 +82,13 @@ class Decision:
         self.w = 0.0  # sum of Black values
         self.score: float | None = None
 
-    def expand(self, ev: Evaluation, bonus_prior: float = 0.2) -> None:
+    def expand(self, ev: Evaluation) -> None:
+        # Only the player's own moves: a bonus is never the player's (or the program's) decision.
         acts = np.asarray(self.state.legal_actions(), dtype=np.int64)
         p = ev.priors[acts].astype(np.float64)
         s = p.sum()
-        p = p / s if s > 0 else np.full(len(acts), 1.0 / len(acts))
-        if self.state.can_use_bonus:
-            # choice trigger: spending a bonus now is one more option for the player to move
-            acts = np.append(acts, self.state.config.bonus_action)
-            p = np.append(p * (1.0 - bonus_prior), bonus_prior)
         self.actions = acts
-        self.P = p
+        self.P = p / s if s > 0 else np.full(len(acts), 1.0 / len(acts))
         self.N = np.zeros(len(acts))
         self.W = np.zeros(len(acts))
         self.expanded = True
@@ -206,8 +200,7 @@ class SearchResult:
         """Visit distribution over the N*N+1 actions (the self-play policy target)."""
         pi = np.zeros(self.size * self.size + 1, dtype=np.float32)
         for s in self.stats:
-            if s.action < len(pi):  # "use a bonus" (choice trigger) is not a board action
-                pi[s.action] = s.visits
+            pi[s.action] = s.visits
         t = pi.sum()
         return pi / t if t > 0 else pi
 
@@ -300,7 +293,7 @@ class Search:
     # ------------------------------------------------------------------ expansion
     def finish(self, leaves: Sequence[Leaf], evals: Sequence[Evaluation]) -> None:
         for leaf, ev in zip(leaves, evals, strict=True):
-            leaf.node.expand(ev, self.params.bonus_prior)
+            leaf.node.expand(ev)
             if leaf.node is self.root and self.params.dirichlet_alpha > 0 and not self._noise_done:
                 self._add_noise()
             self._backup(leaf.path, ev.black_win, leaf.node)
@@ -344,9 +337,7 @@ class Search:
         while len(out) < pv_len:
             a = int(node.actions[i])
             step: dict[str, Any] = {"color": COLOR_NAMES[node.actor], "action": a}
-            if a == n * n + 1:
-                step.update(pass_=False, bonus=True, x=None, y=None)
-            elif a == n * n:
+            if a == n * n:
                 step.update(pass_=True, x=None, y=None)
             else:
                 step.update(pass_=False, x=a % n, y=a // n)

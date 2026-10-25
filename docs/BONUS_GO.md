@@ -10,7 +10,7 @@ be played.
 | | Bonus Mode **off** (standard Go) | Bonus Mode **on** (this variant) |
 |---|---|---|
 | Who moves | Players alternate | Players alternate turns; a bonus turn has several moves |
-| Keep color | A manual lock: tap it and the shown colour plays every move until you tap it again. No move limit | **You choose** (default): before the first move of a turn it reads "Use bonus · n left"; tapping it spends one bonus and locks the player for the bonus moves. **Random**: a read-only indicator that turns on by itself for a scheduled bonus turn. Either way it turns off by itself when the turn's moves are used up, and it can never add or extend a bonus mid-turn |
+| Keep color | A manual lock: tap it and the shown colour plays every move until you tap it again. No move limit | **Judge decides** (default): before the first move of a turn it reads "Judge: grant bonus · n left"; the judge taps it to grant the player a bonus, and Keep color locks the player for the bonus moves. **Random**: a read-only indicator that turns on by itself for a bonus turn the Mac scheduled. Either way it turns off by itself when the turn's moves are used up, and it can never add or extend a bonus mid-turn |
 | Game state | In the browser (as before) | On the Mac, which holds the hidden bonus schedule |
 
 Bonus Mode is never switched on or off silently in the middle of a game. Turning it on asks whether to start a new
@@ -43,11 +43,13 @@ Every turn, normal or bonus, counts as one **personal turn** of its player.
 
 ### When a bonus starts
 
-Each game uses one of two **triggers**, fixed when the game is created (the app's default is *you choose*):
+Each game uses one of two **triggers**, fixed when the game is created (the app's default is *judge decides*):
 
-- **You choose** (§4a): at the start of a personal turn, before its first move, the player may spend one of their
-  remaining bonuses. The turn then becomes a bonus turn.
-- **Random** (§4): the hidden schedule decides at the start of each personal turn whether it is a bonus turn.
+- **Judge decides** (§4a): an outside judge, neither player, decides. At the start of a personal turn, before its
+  first move, the judge may grant the player one of their remaining bonuses; the turn then becomes a bonus turn.
+- **Random** (§4): the Mac's hidden schedule decides at the start of each personal turn whether it is a bonus turn.
+
+Either way, to the players and the program the timing is random: neither ever chooses a bonus.
 
 From then on both are the same:
 
@@ -116,23 +118,33 @@ bonus) and then change their own move. This is an analysis tool, not a tournamen
 At creation the Mac publishes a SHA-256 commitment to the schedule (plus a random salt). When the game ends the
 schedule and salt are revealed, so the commitment can be checked.
 
-## 4a. Bonuses chosen by the players (the app's default)
+## 4a. Bonuses granted by a judge (the app's default)
 
-- Each player has an allocation of bonuses (0–50). Remaining counts are public.
-- At the start of their personal turn, **before the turn's first move**, the player to move may use one: the turn
-  becomes a bonus turn of `moves_per_bonus` moves in total. In the app this is the Keep color button ("Use
-  bonus · n left").
-- A bonus can be used only by the player to move, only before that turn's first move, and only with one left. It
-  can never be used mid-turn, added to a bonus turn, or extended. Using a bonus and then passing at once makes a
-  pass-only turn (the bonus is spent).
-- There is no deadline and nothing is random or hidden: unused bonuses lapse when the game ends. The horizon H is
-  not used.
-- Undo/redo restores the bonus counts exactly. The game record stores the decision as an action (`"bonus"`) and a
-  `bonus_used` event.
-- For the search, using a bonus is a **decision** of the player to move. The opponent's later use of their bonuses
-  is their decision too, so it is searched adversarially, not as chance. The evaluators do not value a bonus kept
-  for later, so the search's advice on *when* to use one is approximate. The trained network was trained with
-  random bonuses only, so in choice games its estimates are labelled approximate.
+- Each player has an allocation of bonuses (0–50; default 3 each). Remaining counts are public.
+- **An outside judge decides when they happen**, not the players and not the program. At the start of a player's
+  personal turn, before the turn's first move, the judge may grant that player one of their remaining bonuses: the
+  turn becomes a bonus turn of `moves_per_bonus` moves in total. In the app the judge taps Keep color ("Judge:
+  grant bonus · n left").
+- A bonus can be granted only to the player to move, only before that turn's first move, and only with one left.
+  It can never be granted mid-turn, added to a bonus turn, or extended. A bonus granted and then followed at once by
+  a pass makes a pass-only turn (the bonus is spent). There is no deadline: unused bonuses lapse at game end.
+- **To the players and the program the judge's timing is random.** The analysis therefore never suggests using a
+  bonus. It treats every future bonus of both players as a chance event with a public model of the judge: the
+  remaining bonuses spread evenly over the player's personal turns up to H, so
+
+  ```
+  P(next turn is a bonus) = r / max(H − t, r)      (0 with no bonus left)
+  ```
+
+  This is §4's probability while the judge keeps within H; if the judge still holds bonuses near or past H, the
+  model expects them on the next turns (P reaches 1). H is a setting of the model, not a rule for the judge. A real
+  judge may behave differently, so win estimates in judge games are approximations of that model.
+- The current turn is analysed as it stands: a normal turn until the judge grants a bonus (analyse again after a
+  grant).
+- Undo/redo restores the bonus counts exactly. The game record stores the grant as an action (`"bonus"`) and a
+  `bonus_granted` event. The Mac draws no schedule for judge games.
+- The trained network was trained on the Mac's random schedule; in judge games its results are labelled
+  approximate.
 
 ## 5. End of the game
 
@@ -182,8 +194,9 @@ enter the bonus state explicitly:
 - how many consecutive pass-only turns just happened (normally 0).
 
 For random-trigger games the Mac validates these (0 ≤ r ≤ H − t) and draws a fresh hidden schedule for the remaining
-bonuses, uniform over the remaining eligible turns, so the future is distributed exactly as in §4. For games where
-players choose (§4a) only the remaining counts and the current turn's state matter. Such games are labelled **"history
+bonuses, uniform over the remaining eligible turns, so the future is distributed exactly as in §4. For judge games
+(§4a) the remaining counts, the turns started (for the probability model) and the current turn's state matter; no
+schedule is drawn. Such games are labelled **"history
 unknown"**: superko only compares positions from the imported position onwards, and earlier bonus timing is unknown.
 
 ## 8. Analysis sources and their limits

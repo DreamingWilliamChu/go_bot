@@ -184,8 +184,8 @@ def test_root_noise_and_uniform_evaluator_smoke() -> None:
     assert s.root.expanded and s.root.P.sum() == pytest.approx(1.0) and not np.allclose(s.root.P, s.root.P[0])
 
 
-# ---------------------------------------------------------------------- choice trigger: bonuses are decisions
-def choice_state(rows, to_move, remaining, komi=0.5, k=3):
+# ---------------------------------------------------------------------- judge trigger: bonuses are chance
+def judge_state(rows, to_move, remaining, started=(1, 1), komi=0.5, k=3, horizon=10, cap=None):
     b = Board.from_rows(rows)
     cfg = VariantConfig(
         size=b.n,
@@ -193,9 +193,11 @@ def choice_state(rows, to_move, remaining, komi=0.5, k=3):
         black_bonuses=remaining[0],
         white_bonuses=remaining[1],
         moves_per_bonus=k,
-        trigger="choice",
+        trigger="judge",
+        horizon=horizon,
+        max_placements=cap,
     )
-    return imported_state(cfg, b, to_move, remaining, (1, 1))
+    return imported_state(cfg, b, to_move, remaining, started)
 
 
 def stone_balance(s):
@@ -203,51 +205,51 @@ def stone_balance(s):
     return min(1.0, max(0.0, 0.5 + 0.08 * (b - w)))
 
 
-def test_search_offers_and_chooses_using_a_bonus() -> None:
-    root = choice_state(EMPTY5, BLACK, (1, 0))
+def test_search_never_offers_a_bonus_as_a_move() -> None:
+    root = judge_state(EMPTY5, BLACK, (1, 1))
+    assert root.can_grant_bonus  # the judge could grant one now, but that is not the player's choice
     s = run_search(
-        root, FnEvaluator(stone_balance), visits=1500, params=SearchParams(batch=1), rng=random.Random(0)
+        root, FnEvaluator(stone_balance), visits=1200, params=SearchParams(batch=1), rng=random.Random(0)
     )
     res = s.result()
-    bonus = root.config.bonus_action
-    assert bonus in [x.action for x in res.stats]
-    assert res.stats[0].action == bonus  # three stones now beat one
-    assert res.stats[0].pv[0].get("bonus") is True
-    assert res.stats[0].pv[1]["color"] == "B" and res.stats[0].pv[2]["color"] == "B"
-    assert res.policy().shape == (26,)  # the bonus is not a board action: not in the policy target
+    assert root.config.bonus_action not in [x.action for x in res.stats]
+    assert all(not step.get("bonus") for x in res.stats for step in x.pv)
+    assert res.policy().shape == (26,)
 
 
-def test_opponent_bonus_choices_are_adversarial_not_chance() -> None:
-    def search(white_bonuses: int):
-        root = choice_state(EMPTY5, BLACK, (0, white_bonuses))
+def test_judge_bonuses_of_both_players_are_chance_with_the_modelled_probability() -> None:
+    root = judge_state(EMPTY5, BLACK, (1, 1), started=(1, 6), horizon=10)
+    p_white = root.trigger_probability(WHITE)
+    assert p_white == pytest.approx(1 / 4)
+    s = run_search(
+        root, FnEvaluator(stone_balance), visits=2000, params=SearchParams(batch=1), rng=random.Random(0)
+    )
+    chances = [c for c in s.root.children.values() if isinstance(c, Chance)]
+    assert chances and all(c.probs[0] == pytest.approx(p_white) for c in chances)
+    big = max(chances, key=lambda c: c.n)
+    assert big.N[0] / big.n == pytest.approx(p_white, abs=0.05)
+
+
+def test_a_judge_bonus_that_may_come_changes_the_values() -> None:
+    def black_win(white_bonuses: int) -> float:
+        root = judge_state(EMPTY5, BLACK, (0, white_bonuses), started=(1, 6), horizon=10)
         s = run_search(
             root, FnEvaluator(stone_balance), visits=2000, params=SearchParams(batch=1), rng=random.Random(0)
         )
-        assert not any(isinstance(c, Chance) for c in s.root.children.values())
-        return s
+        return float(s.result().stats[0].black_win or 0)
 
-    s1, s0 = search(1), search(0)
-    # at White's first decision under Black's best move, White chooses to spend its bonus
-    best = int(np.argmax(s1.root.N))
-    white = s1.root.children[best]
-    assert isinstance(white, Decision) and white.actor == WHITE and white.state.can_use_bonus
-    assert int(white.actions[int(np.argmax(white.N))]) == white.state.config.bonus_action
-    # and Black's prospects are lower when White holds a bonus
-    assert s1.result().stats[0].black_win < s0.result().stats[0].black_win
+    assert black_win(2) < black_win(0)
 
 
-def test_exact_solver_and_search_use_a_bonus_to_capture() -> None:
+def test_exact_solver_treats_the_judge_as_chance() -> None:
     from gobot.variant.search.exact import solve
 
+    # White's straight-three group; Black's next turn is a bonus with modelled probability 1 (1 left, 1
+    # turn before H): White must take the vital point, exactly as against a certain random bonus.
     rows = ["...OX", "OOOOX", "XXXXX", "X.X.X", "XXXXX"]
-    b = Board.from_rows(rows)
-    cfg = VariantConfig(
-        size=5, komi=9.5, black_bonuses=1, white_bonuses=0, trigger="choice", max_placements=4
-    )
-    st = imported_state(cfg, b, BLACK, (1, 0), (1, 1))
+    st = judge_state(rows, WHITE, (1, 0), started=(3, 3), komi=9.5, horizon=4, cap=3)
+    assert st.trigger_probability(BLACK) == 1.0
     sol = solve(st)
-    # spending the bonus and filling all three liberties wins; so does the vital point within this cap
-    assert cfg.bonus_action in sol.best and sol.value == 1.0
-    assert min(sol.action_values.values()) < 1.0  # but most moves lose
+    assert sol.best == {1} and st.config.bonus_action not in sol.action_values
     s = run_search(st, HeuristicEvaluator(), visits=3000, params=SearchParams(batch=1), rng=random.Random(0))
-    assert s.result().stats[0].action in sol.best
+    assert s.result().stats[0].action == 1

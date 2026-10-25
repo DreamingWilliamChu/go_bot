@@ -29,7 +29,8 @@ class ConfigIn(BaseModel):
     white_bonuses: int = Field(default=DEFAULT_BONUSES, ge=0)
     moves_per_bonus: int = 3
     horizon: int | None = None  # None: default for the board size
-    trigger: Literal["choice", "random"] = "choice"  # the app's default: players decide
+    # judge (the app's default): an outside judge grants bonuses; to players and program they are random
+    trigger: Literal["judge", "random", "choice"] = "judge"
 
     @field_validator("size")
     @classmethod

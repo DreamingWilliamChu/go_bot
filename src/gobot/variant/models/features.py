@@ -156,8 +156,10 @@ def _raw_from_state(state: VariantState) -> Raw:
 
 
 def _probability(remaining: np.ndarray, started: np.ndarray, horizon: np.ndarray) -> np.ndarray:
-    eligible = horizon - started
-    return np.where(eligible > 0, remaining / np.maximum(eligible, 1), 0.0)
+    """Public next-turn bonus probability r / max(H - t, r) (0 without a bonus left). For the random
+    trigger r <= H - t always, so this is r / (H - t); for a judge it is the same model as
+    ``randomness.modelled_probability``."""
+    return np.where(remaining > 0, remaining / np.maximum(np.maximum(horizon - started, remaining), 1), 0.0)
 
 
 def encode(raw: Raw, *, blind: bool = False) -> tuple[np.ndarray, np.ndarray, np.ndarray]:

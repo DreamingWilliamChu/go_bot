@@ -22,8 +22,8 @@ export function BonusEntryDialog(p: Props) {
         <h2>Bonus Mode</h2>
         <p class="small">
           Bonus-turn Go: each player has a few bonus turns of several moves in a row,{' '}
-          {p.prefs.trigger === 'choice'
-            ? 'used whenever the player chooses (before the first move of a turn).'
+          {p.prefs.trigger === 'judge'
+            ? 'granted by a judge at the start of a turn. To the players and the analysis their timing is random.'
             : 'timed at random and kept secret by the Mac until they start.'}{' '}
           Your standard game stays as it is and comes back when you turn Bonus Mode off.
         </p>

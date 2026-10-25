@@ -23,7 +23,7 @@ function view(s: Partial<VariantState>): VariantView {
     lastPlacement: null,
     historyKnown: true,
     legal: [],
-    canUseBonus: false,
+    canGrantBonus: false,
     result: null,
     ...s,
   }
@@ -68,30 +68,34 @@ describe('bonus status text', () => {
   })
 })
 
-describe('bonuses chosen by the player', () => {
-  const choice = (s: Partial<VariantState>) => {
+describe('bonuses granted by a judge', () => {
+  const judge = (s: Partial<VariantState>) => {
     const v = view(s)
-    return { ...v, state: { ...v.state, config: { ...v.state.config, trigger: 'choice' as const }, ...s } }
+    return { ...v, state: { ...v.state, config: { ...v.state.config, trigger: 'judge' as const }, ...s } }
   }
 
-  it('turns Keep color into the Use bonus control before the first move', () => {
-    const lock = lockText(choice({ canUseBonus: true, remaining: { B: 2, W: 0 } }))
-    expect(lock).toMatchObject({ canUse: true, on: false, label: 'Use bonus · 2 left' })
-    expect(chanceText(choice({ canUseBonus: true }))).toMatch(/Black may use a bonus now/)
+  it('turns Keep color into the judge\u2019s Grant bonus control before the first move', () => {
+    const lock = lockText(judge({ canGrantBonus: true, remaining: { B: 2, W: 0 } }))
+    expect(lock).toMatchObject({ canUse: true, on: false, label: 'Judge: grant bonus · 2 left' })
   })
 
-  it('cannot be used without a bonus left, and locks during the bonus turn', () => {
-    expect(lockText(choice({ canUseBonus: false, remaining: { B: 0, W: 1 } }))).toMatchObject({
+  it('shows the modelled chance, even when the judge is late (more bonuses than turns before H)', () => {
+    const v = judge({ remaining: { B: 3, W: 1 }, eligibleTurnsLeft: { B: 2, W: 10 }, nextTurnBonusProbability: { B: 1, W: 0.1 } })
+    expect(chanceText(v)).toBe('The judge decides; modelled next-turn chance — Black 3/3 (100%) · White 1/10 (10%)')
+  })
+
+  it('cannot be granted without a bonus left, and locks during the bonus turn', () => {
+    expect(lockText(judge({ canGrantBonus: false, remaining: { B: 0, W: 1 } }))).toMatchObject({
       canUse: false,
       label: 'Keep · Black has no bonus',
     })
-    const active = lockText(choice({ bonusActive: true, movesLeft: 2, turnMoves: 3 }))
+    const active = lockText(judge({ bonusActive: true, movesLeft: 2, turnMoves: 3 }))
     expect(active).toMatchObject({ canUse: false, on: true, label: 'Keep Black · bonus 2/3' })
   })
 
-  it('announces a bonus the player just chose', () => {
-    const v = choice({ bonusActive: true, movesLeft: 3, turnMoves: 3 })
-    const used = { ...v, events: [{ type: 'bonus_used' as const, player: 'B' as const, turnIndex: 4, moves: 3 }] }
-    expect(announcementText(used)).toBe('Bonus! Black plays 3 moves in a row this turn.')
+  it('announces a bonus the judge just granted', () => {
+    const v = judge({ bonusActive: true, movesLeft: 3, turnMoves: 3 })
+    const granted = { ...v, events: [{ type: 'bonus_granted' as const, player: 'B' as const, turnIndex: 4, moves: 3 }] }
+    expect(announcementText(granted)).toBe('Bonus! Black plays 3 moves in a row this turn.')
   })
 })
