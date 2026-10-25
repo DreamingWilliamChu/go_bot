@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { api, ApiError, type AuthInfo, type Preset, type StatusResponse } from './api/client'
-import { useAnalysis } from './analysis/useAnalysis'
+import { type BonusSource, useAnalysis } from './analysis/useAnalysis'
 import { colorName } from './analysis/format'
 import { type Color, type GameState, type Setup, type Stone, collapseToSetup, currentBoard, newGame, nextPlayer } from './game/game'
 import { FRESH_ROUND, type KeepRound, type Point, advanceRound } from './game/keepRound'
 import { BoardScreen } from './screens/BoardScreen'
-import { VariantBoardScreen } from './screens/VariantBoardScreen'
+import { type SourceOption, VariantBoardScreen } from './screens/VariantBoardScreen'
 import { variantApi } from './variant/api'
 import { BonusEntryDialog } from './variant/BonusEntryDialog'
 import { BonusStateDialog } from './variant/BonusStateDialog'
@@ -42,6 +42,18 @@ interface Prefs {
   showOwnership: boolean
   autoAnalyze: boolean
   keepMoves: number // Keep color: how many moves ahead the analysis shows (look-ahead window)
+  bonusSource: BonusSource // analysis source for bonus games
+}
+
+interface VariantModelInfo {
+  id: string
+  label: string
+  sizes: number[]
+}
+
+interface EvaluatorsResponse {
+  sources: { id: string; label: string; available: boolean }[]
+  models: VariantModelInfo[]
 }
 
 const DEFAULT_PRESETS: Preset[] = [
@@ -49,7 +61,14 @@ const DEFAULT_PRESETS: Preset[] = [
   { id: 'standard', label: 'Standard', seconds: 6 },
   { id: 'deep', label: 'Deep', seconds: 20 },
 ]
-const DEFAULT_PREFS: Prefs = { presetId: 'deep', customSeconds: 10, showOwnership: false, autoAnalyze: true, keepMoves: 3 }
+const DEFAULT_PREFS: Prefs = {
+  presetId: 'deep',
+  customSeconds: 10,
+  showOwnership: false,
+  autoAnalyze: true,
+  keepMoves: 3,
+  bonusSource: 'katago-net',
+}
 
 // v2 made Deep the default. v1 saved the old default on first load, so a saved
 // v1 preset can't be told apart from a choice: carry the other prefs over and
@@ -149,6 +168,14 @@ export function App() {
     save('gobot.bonusLast.v1', null)
   })
   const inBonus = session.kind === 'variant'
+  const [evaluators, setEvaluators] = useState<EvaluatorsResponse | null>(null)
+  useEffect(() => {
+    if (!inBonus || evaluators || !auth || auth.required) return
+    api
+      .get<EvaluatorsResponse>('/api/variant/evaluators')
+      .then(setEvaluators)
+      .catch(() => undefined)
+  }, [inBonus, evaluators, auth])
 
   // Bonus game created or opened: show it.
   const enterBonus = useCallback(
@@ -255,6 +282,51 @@ export function App() {
   const presets = status?.presets ?? DEFAULT_PRESETS
   const seconds =
     prefs.presetId === 'custom' ? prefs.customSeconds : presets.find((p) => p.id === prefs.presetId)?.seconds ?? 6
+
+  // Analysis sources for the current bonus game; a trained network only for sizes it supports.
+  const bonusSize = variant.view?.state.size ?? 0
+  const sources: SourceOption[] = useMemo(() => {
+    const has = (id: string) => evaluators?.sources.find((s) => s.id === id)?.available ?? false
+    const list: SourceOption[] = [
+      { id: 'katago', label: 'KataGo (standard Go)', available: has('katago'), why: 'KataGo is not available' },
+      { id: 'katago-net', label: 'Bonus search · KataGo net', available: has('katago-net'), why: 'KataGo is not available' },
+      { id: 'heuristic', label: 'Bonus search · heuristic', available: true },
+    ]
+    for (const m of evaluators?.models ?? [])
+      list.push({
+        id: `net:${m.id}`,
+        label: `Bonus search · ${m.label}`,
+        available: m.sizes.includes(bonusSize),
+        why: `Trained for ${m.sizes.map((n) => `${n}×${n}`).join(', ')} only`,
+      })
+    return list
+  }, [evaluators, bonusSize])
+  const bonusSource: BonusSource = sources.find((o) => o.id === prefs.bonusSource && o.available)
+    ? prefs.bonusSource
+    : (sources.find((o) => o.available && o.id !== 'katago')?.id ?? 'heuristic')
+
+  // Bonus games: analyse each new position (Auto) with the chosen source; leaving Bonus Mode stops it.
+  const bonusAsked = useRef<string | null>(null)
+  const startBonus = useCallback(() => {
+    const v = variant.view
+    if (!v || v.state.phase === 'terminal') return
+    analysis.startBonus(v.gameId, v.revision, bonusSource, seconds)
+  }, [variant.view, analysis.startBonus, bonusSource, seconds])
+  useEffect(() => {
+    const v = variant.view
+    if (!inBonus) {
+      if (bonusAsked.current !== null) analysis.invalidate()
+      bonusAsked.current = null
+      return
+    }
+    if (!v || !evaluators) return
+    const key = `${v.gameId}:${v.revision}:${bonusSource}`
+    if (bonusAsked.current === key) return
+    bonusAsked.current = key
+    analysis.invalidate()
+    if (prefs.autoAnalyze && v.state.phase !== 'terminal') startBonus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inBonus, variant.view?.gameId, variant.view?.revision, bonusSource, evaluators])
 
   const gameRef = useRef(game)
   gameRef.current = game
@@ -391,6 +463,20 @@ export function App() {
                 void runBonus(async () => variantApi.open(JSON.parse(await file.text()) as unknown))
               }
               toast={toast}
+              analysis={analysis}
+              engine={status?.engine ?? null}
+              presets={presets}
+              presetId={prefs.presetId}
+              customSeconds={prefs.customSeconds}
+              autoAnalyze={prefs.autoAnalyze}
+              onPreset={(id) => setPrefs({ ...prefs, presetId: id })}
+              onCustomSeconds={(sec) => setPrefs({ ...prefs, customSeconds: sec })}
+              onAnalyze={startBonus}
+              onStop={analysis.stop}
+              onToggleAuto={() => setPrefs({ ...prefs, autoAnalyze: !prefs.autoAnalyze })}
+              source={bonusSource}
+              sources={sources}
+              onSource={(src) => setPrefs({ ...prefs, bonusSource: src })}
             />
           ) : (
             <div class="panel">

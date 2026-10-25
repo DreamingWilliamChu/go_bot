@@ -1,10 +1,13 @@
-import type { ComponentChildren } from 'preact'
 import { useMemo, useRef, useState } from 'preact/hooks'
 import GoBoard from '@sabaki/go-board'
+import type { EngineStatus, Preset } from '../api/client'
+import { AnalysisPanel, type PvSelection } from '../analysis/AnalysisPanel'
 import { colorName } from '../analysis/format'
-import { BoardView } from '../board/BoardView'
+import { type BonusSource, bonusKey } from '../analysis/useAnalysis'
+import { BoardView, type CandidateMark } from '../board/BoardView'
 import { MovesToolbar } from '../board/MovesToolbar'
-import { boardWithLine } from '../board/overlay'
+import { boardWithLine, candidateMarks, lockPrediction, overlayLine } from '../board/overlay'
+import type { AnalysisBundle } from './BoardScreen'
 import type { VariantAction } from '../variant/api'
 import { BonusSettings, bonusPrefsValid } from '../variant/BonusSettings'
 import {
@@ -28,7 +31,28 @@ interface Props {
   onLeave: () => void // Bonus Mode off
   onOpenRecord: (file: File) => void
   toast: (msg: string) => void
-  analysis?: ComponentChildren
+  // analysis
+  analysis: AnalysisBundle
+  engine: EngineStatus | null
+  presets: Preset[]
+  presetId: string
+  customSeconds: number
+  autoAnalyze: boolean
+  onPreset: (id: string) => void
+  onCustomSeconds: (s: number) => void
+  onAnalyze: () => void
+  onStop: () => void
+  onToggleAuto: () => void
+  source: BonusSource
+  sources: SourceOption[]
+  onSource: (s: BonusSource) => void
+}
+
+export interface SourceOption {
+  id: BonusSource
+  label: string
+  available: boolean
+  why?: string // why it is not available here
 }
 
 export function goBoardOf(v: VariantView): GoBoard {
@@ -45,9 +69,26 @@ export function VariantBoardScreen(p: Props) {
   const s = view.state
   const cfg = s.config
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [pvSel, setPvSel] = useState<PvSelection | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const board = useMemo(() => goBoardOf(view), [view])
-  const drawn = useMemo(() => boardWithLine(board, null), [board])
+  // Only analysis of this exact bonus position (game and revision) is ever drawn.
+  const result = p.analysis.forKey === bonusKey(view.gameId, view.revision) ? p.analysis.result : null
+  const pvCand = pvSel && result ? result.candidates[pvSel.cand] ?? null : null
+  // During a bonus turn: see-through predictions for the moves the locked player still has.
+  const prediction = useMemo(
+    () => (s.bonusActive && s.phase === 'in_turn' ? lockPrediction(board, result, null, s.movesLeft) : null),
+    [board, result, s.bonusActive, s.phase, s.movesLeft],
+  )
+  const line = useMemo(
+    () => overlayLine(pvCand, pvSel, prediction, s.toMove, s.turnMoves - s.movesLeft + 1),
+    [pvCand, pvSel, prediction, s.toMove, s.turnMoves, s.movesLeft],
+  )
+  const drawn = useMemo(() => boardWithLine(board, line), [board, line])
+  const marks: CandidateMark[] = useMemo(
+    () => (pvSel || prediction ? [] : candidateMarks(result, s.size)),
+    [pvSel, prediction, result, s.size],
+  )
   const lock = lockText(view)
   const announcement = announcementText(view)
   const over = s.phase === 'terminal'
@@ -59,6 +100,7 @@ export function VariantBoardScreen(p: Props) {
       p.toast('The game is over. Undo to continue, or start a new bonus game.')
       return
     }
+    setPvSel(null)
     void act({ type: 'place', x, y })
   }
 
@@ -94,7 +136,8 @@ export function VariantBoardScreen(p: Props) {
           <BoardView
             size={s.size}
             signMap={drawn.signMap}
-            lastMove={last ? [last.x, last.y] : null}
+            lastMove={last && !pvSel ? [last.x, last.y] : null}
+            candidates={marks}
             pv={drawn.pv}
             onPoint={onPoint}
             ariaLabel={`Bonus Go board, ${colorName(s.toMove)} to play`}
@@ -206,15 +249,53 @@ export function VariantBoardScreen(p: Props) {
       </div>
 
       <div class="side-col">
-        {p.analysis ?? (
-          <div class="panel">
-            <h2>Bonus game</h2>
-            <p class="small">
-              Bonus turns are hidden and random. When one starts, it is announced before you move, Keep color locks the
-              player for that many moves, then releases by itself.
-            </p>
-          </div>
-        )}
+        <AnalysisPanel
+          bonus
+          sourcePicker={
+            <div class="seg source-picker" role="radiogroup" aria-label="Analysis source" data-testid="source-picker">
+              {p.sources.map((o) => (
+                <button
+                  key={o.id}
+                  role="radio"
+                  aria-checked={p.source === o.id}
+                  class={p.source === o.id ? 'on' : ''}
+                  disabled={!o.available}
+                  title={o.available ? o.label : o.why}
+                  data-testid={`source-${o.id.replace(':', '-')}`}
+                  onClick={() => {
+                    setPvSel(null)
+                    p.onSource(o.id)
+                  }}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          }
+          status={over ? 'idle' : p.analysis.status}
+          result={over ? null : result}
+          error={p.analysis.error}
+          warning={p.analysis.warning}
+          engine={p.engine}
+          presets={p.presets}
+          presetId={p.presetId}
+          customSeconds={p.customSeconds}
+          showOwnership={false}
+          autoAnalyze={p.autoAnalyze}
+          paused={over}
+          pvSel={result ? pvSel : null}
+          connection={p.analysis.connection}
+          onPreset={p.onPreset}
+          onCustomSeconds={p.onCustomSeconds}
+          onAnalyze={() => {
+            setPvSel(null)
+            p.onAnalyze()
+          }}
+          onStop={p.onStop}
+          onToggleOwnership={() => undefined}
+          onToggleAuto={p.onToggleAuto}
+          onPv={setPvSel}
+        />
       </div>
     </div>
   )

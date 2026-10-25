@@ -1019,3 +1019,18 @@ video.live {
   justify-content: flex-end;
   margin-top: 8px;
 }
+/* Analysis source for bonus games: long labels wrap onto two columns on phones. */
+.seg.source-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  margin-bottom: 10px;
+}
+.seg.source-picker button {
+  white-space: normal;
+  line-height: 1.2;
+  min-height: 40px;
+}
+.pv-bonus {
+  color: #c99a00;
+  font-weight: 700;
+}

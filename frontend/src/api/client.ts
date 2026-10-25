@@ -7,6 +7,8 @@ export interface PvStep {
   pass: boolean
   color: 'B' | 'W'
   visits?: number
+  // Bonus search: the next player's turn starts after this move (bonus = the outcome the line follows).
+  turnStart?: { player: 'B' | 'W'; bonus: boolean; probability: number | null }
 }
 
 export interface Candidate {
@@ -17,7 +19,7 @@ export interface Candidate {
   order: number
   visits: number
   blackWinrate: number
-  blackScoreLead: number
+  blackScoreLead: number | null // null: the evaluator has no score estimate
   prior: number
   lcb: number | null
   pv: PvStep[]
@@ -33,7 +35,7 @@ export interface AnalysisResult {
   currentPlayer?: 'B' | 'W'
   rootVisits?: number
   blackWinrate?: number
-  blackScoreLead?: number
+  blackScoreLead?: number | null
   scoreStdev?: number | null
   candidates: Candidate[]
   blackOwnership?: number[]
@@ -41,6 +43,11 @@ export interface AnalysisResult {
   cancelled: boolean
   timedOut: boolean
   engine?: { modelId: string | null; version: string | null; backend: string | null }
+  // Bonus-turn positions: which analysis source produced this and with what (absent for standard Go).
+  source?: 'katago' | 'variant'
+  evaluator?: { kind: string; label: string; modelVersion: string | null; approximate: boolean; note: string }
+  budget?: { visits: number; seconds: number; maxVisits: number | null; maxSeconds: number | null }
+  rules?: { variant: string; scoring: string; komi: number; superko: string; movesPerBonus: number; horizon: number }
 }
 
 export interface EngineStatus {
@@ -227,10 +234,10 @@ export class AnalysisSocket {
     else this.queue.push(s)
   }
 
-  analyze(requestId: string, position: unknown, params: unknown) {
+  analyze(requestId: string, target: Record<string, unknown>, params: unknown) {
     // Drop any queued analyze requests: only the newest position matters.
     this.queue = this.queue.filter((q) => !q.includes('"type":"analyze"'))
-    this.send({ type: 'analyze', requestId, position, params })
+    this.send({ type: 'analyze', requestId, ...target, params })
   }
 
   cancel(requestId: string) {

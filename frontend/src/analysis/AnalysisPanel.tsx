@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact'
 import type { AnalysisResult, EngineStatus, Preset } from '../api/client'
 import {
   CAND_LABELS,
@@ -38,6 +39,9 @@ interface Props {
   onToggleOwnership: () => void
   onToggleAuto: () => void
   onPv: (sel: PvSelection | null) => void
+  // Bonus games: the source picker, and labels for sources other than plain KataGo.
+  bonus?: boolean
+  sourcePicker?: ComponentChildren
 }
 
 export function AnalysisPanel(p: Props) {
@@ -46,10 +50,14 @@ export function AnalysisPanel(p: Props) {
   const player = r?.currentPlayer
   const cands = r?.candidates.slice(0, 3) ?? []
   const pvCand = p.pvSel ? r?.candidates[p.pvSel.cand] : null
-  const summary = r && r.type === 'final' ? summarize(r, p.engine?.modelInternalName ?? p.engine?.modelId ?? null) : null
+  const variant = r?.source === 'variant'
+  const summary =
+    r && r.type === 'final' && !r.source ? summarize(r, p.engine?.modelInternalName ?? p.engine?.modelId ?? null) : null
+  const approx = r?.evaluator?.approximate ? ' (approximate)' : ''
 
   return (
-    <section class="panel analysis" aria-label="KataGo analysis">
+    <section class="panel analysis" aria-label={p.bonus ? 'Bonus game analysis' : 'KataGo analysis'}>
+      {p.sourcePicker}
       <div class="analysis-controls">
         <div class="seg" role="radiogroup" aria-label="Thinking time">
           {p.presets.map((pr) => (
@@ -100,9 +108,11 @@ export function AnalysisPanel(p: Props) {
               Analyze
             </button>
           )}
-          <label class="toggle">
-            <input type="checkbox" checked={p.showOwnership} onChange={p.onToggleOwnership} /> Territory
-          </label>
+          {p.bonus ? null : (
+            <label class="toggle">
+              <input type="checkbox" checked={p.showOwnership} onChange={p.onToggleOwnership} /> Territory
+            </label>
+          )}
           <label class="toggle">
             <input type="checkbox" checked={p.autoAnalyze} disabled={p.paused} onChange={p.onToggleAuto} /> Auto
           </label>
@@ -117,7 +127,9 @@ export function AnalysisPanel(p: Props) {
             : 'Connecting to the Mac…'}
         </p>
       ) : null}
-      {p.status === 'starting' ? <p class="note">Loading KataGo and the neural network…</p> : null}
+      {p.status === 'starting' ? (
+        <p class="note">{p.bonus ? 'Starting the bonus search…' : 'Loading KataGo and the neural network…'}</p>
+      ) : null}
       {p.error ? (
         <p class="note error" role="alert" data-testid="analysis-error">
           {p.error}
@@ -134,17 +146,21 @@ export function AnalysisPanel(p: Props) {
           </div>
           <div class="wr">
             <div class="wr-label">
-              Black's win probability <b data-testid="black-winrate">{pct(r.blackWinrate)}</b>
+              {variant ? `Black's win estimate${approx}` : "Black's win probability"}{' '}
+              <b data-testid="black-winrate">{pct(r.blackWinrate)}</b>
               <span class="muted"> · White {pct(1 - r.blackWinrate)}</span>
             </div>
             <div class="wr-bar" aria-hidden="true">
               <div class="wr-b" style={{ width: `${(r.blackWinrate * 100).toFixed(1)}%` }} />
             </div>
           </div>
-          <div class="lead">
-            Score estimate: <b data-testid="score-lead">{leadText(r.blackScoreLead)}</b>
-            <span class="muted"> (points ahead)</span>
-          </div>
+          {r.blackScoreLead !== null && r.blackScoreLead !== undefined ? (
+            <div class="lead">
+              Score estimate{variant ? ` (${r.evaluator?.label ?? 'evaluator'})` : ''}:{' '}
+              <b data-testid="score-lead">{leadText(r.blackScoreLead)}</b>
+              <span class="muted"> (points ahead)</span>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -161,7 +177,8 @@ export function AnalysisPanel(p: Props) {
                   </span>
                 </div>
                 <div class="muted small">
-                  Score {leadText(c.blackScoreLead)} · {visitsLabel(c.visits)}
+                  {c.blackScoreLead !== null ? `Score ${leadText(c.blackScoreLead)} · ` : ''}
+                  {visitsLabel(c.visits)}
                 </div>
               </div>
               <button
@@ -192,6 +209,16 @@ export function AnalysisPanel(p: Props) {
                 onClick={() => p.onPv({ cand: p.pvSel!.cand, step: i + 1 })}
               >
                 {i + 1}.{s.pass ? 'pass' : s.gtp}
+                {s.turnStart?.bonus ? (
+                  <span
+                    class="pv-bonus"
+                    title={`${colorName(s.turnStart.player)}'s turn starts here as a bonus turn${
+                      s.turnStart.probability !== null ? ` (chance ${pct(s.turnStart.probability, 0)})` : ''
+                    }`}
+                  >
+                    {' '}★
+                  </span>
+                ) : null}
               </button>
             ))}
           </div>
@@ -230,31 +257,70 @@ export function AnalysisPanel(p: Props) {
 
       {summary ? <p class="summary small">{summary}</p> : null}
 
-      <dl class="engine-info small" data-testid="engine-info">
-        <div>
-          <dt>Model</dt>
-          <dd>{p.engine?.modelInternalName ?? p.engine?.modelLabel ?? p.engine?.modelId ?? '–'}</dd>
-        </div>
-        <div>
-          <dt>KataGo</dt>
-          <dd>{p.engine?.version ? `v${p.engine.version}` : '–'}</dd>
-        </div>
-        <div>
-          <dt>Backend</dt>
-          <dd>{p.engine?.backend ?? '–'}</dd>
-        </div>
-        <div>
-          <dt>Time</dt>
-          <dd>{r ? `${r.elapsed.toFixed(1)} s` : '–'}</dd>
-        </div>
-        <div>
-          <dt>Visits</dt>
-          <dd data-testid="visits">{visitsText(r?.rootVisits)}</dd>
-        </div>
-      </dl>
-      {p.engine?.fallbackNote ? <p class="note warn small">{p.engine.fallbackNote}</p> : null}
-      <p class="muted tiny">
-        All numbers and suggestions come from KataGo. Win probability and score are shown for the player named.
+      {r?.source ? (
+        <dl class="engine-info small" data-testid="engine-info">
+          <div>
+            <dt>Source</dt>
+            <dd data-testid="analysis-source">{r.source === 'variant' ? 'Bonus search' : 'Standard KataGo'}</dd>
+          </div>
+          <div>
+            <dt>Evaluator</dt>
+            <dd data-testid="analysis-evaluator">{r.evaluator?.label ?? '–'}</dd>
+          </div>
+          <div>
+            <dt>Model</dt>
+            <dd>{r.evaluator?.modelVersion ?? p.engine?.modelInternalName ?? p.engine?.modelId ?? '–'}</dd>
+          </div>
+          <div>
+            <dt>Time</dt>
+            <dd>{`${r.elapsed.toFixed(1)} s`}</dd>
+          </div>
+          <div>
+            <dt>Visits</dt>
+            <dd data-testid="visits">{visitsText(r.rootVisits)}</dd>
+          </div>
+          {r.rules ? (
+            <div>
+              <dt>Rules</dt>
+              <dd>
+                area · komi {r.rules.komi} · superko · {r.rules.movesPerBonus}/bonus · H {r.rules.horizon}
+              </dd>
+            </div>
+          ) : null}
+        </dl>
+      ) : (
+        <dl class="engine-info small" data-testid="engine-info">
+          <div>
+            <dt>Model</dt>
+            <dd>{p.engine?.modelInternalName ?? p.engine?.modelLabel ?? p.engine?.modelId ?? '–'}</dd>
+          </div>
+          <div>
+            <dt>KataGo</dt>
+            <dd>{p.engine?.version ? `v${p.engine.version}` : '–'}</dd>
+          </div>
+          <div>
+            <dt>Backend</dt>
+            <dd>{p.engine?.backend ?? '–'}</dd>
+          </div>
+          <div>
+            <dt>Time</dt>
+            <dd>{r ? `${r.elapsed.toFixed(1)} s` : '–'}</dd>
+          </div>
+          <div>
+            <dt>Visits</dt>
+            <dd data-testid="visits">{visitsText(r?.rootVisits)}</dd>
+          </div>
+        </dl>
+      )}
+      {p.engine?.fallbackNote && !variant ? <p class="note warn small">{p.engine.fallbackNote}</p> : null}
+      <p class="muted tiny" data-testid="analysis-footnote">
+        {r?.source === 'variant'
+          ? `Bonus search: turns, bonus chances and rules are handled exactly; positions are judged by ${
+              r.evaluator?.label ?? 'the evaluator'
+            }. ${r.evaluator?.note ?? ''} Win estimates are Black's, from the search.`
+          : r?.source === 'katago'
+            ? `${r.evaluator?.note ?? ''} Win probability and score are shown for the player named.`
+            : 'All numbers and suggestions come from KataGo. Win probability and score are shown for the player named.'}
       </p>
     </section>
   )

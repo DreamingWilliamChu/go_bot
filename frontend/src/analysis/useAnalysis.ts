@@ -3,10 +3,18 @@ import { AnalysisSocket, type AnalysisResult, type SocketMessage, type SocketSta
 import { type Color, type GameState, toApiPosition } from '../game/game'
 import type { AnalysisStatus } from './AnalysisPanel'
 
+/** What a bonus-game analysis asks for (docs/BONUS_GO.md §8). */
+export type BonusSource = 'katago' | 'katago-net' | 'heuristic' | `net:${string}`
+
+/** Key of the position a result belongs to: standard games by revision, bonus games by id and revision. */
+export const stdKey = (revision: number) => `std:${revision}`
+export const bonusKey = (gameId: string, revision: number) => `var:${gameId}:${revision}`
+
 /**
  * Owns the analysis websocket. Only the most recent request may update the UI: every response
  * carries the requestId it belongs to, and anything else is dropped. Each request also records
- * the game revision it was made for, so results can never be shown on a different position.
+ * the key of the position it was made for (``std:<revision>`` or ``var:<game>:<revision>``), so a
+ * result can never be shown on a different position, or on the other kind of game.
  */
 export function useAnalysis(onFinished?: () => void) {
   const [status, setStatus] = useState<AnalysisStatus>('idle')
@@ -14,8 +22,8 @@ export function useAnalysis(onFinished?: () => void) {
   const [error, setError] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
   const [connection, setConnection] = useState<SocketState>('connecting')
-  const [forRevision, setForRevision] = useState<number | null>(null)
-  const current = useRef<{ requestId: string; revision: number } | null>(null)
+  const [forKey, setForKey] = useState<string | null>(null)
+  const current = useRef<{ requestId: string; key: string } | null>(null)
   const sock = useRef<AnalysisSocket | null>(null)
   const seq = useRef(0)
   const finished = useRef(onFinished)
@@ -32,13 +40,13 @@ export function useAnalysis(onFinished?: () => void) {
           break
         case 'partial':
           setResult(m)
-          setForRevision(cur.revision)
+          setForKey(cur.key)
           setStatus('running')
           break
         case 'final':
           if (!m.noResults) {
             setResult(m)
-            setForRevision(cur.revision)
+            setForKey(cur.key)
           }
           setStatus(m.cancelled ? 'cancelled' : 'done')
           finished.current?.()
@@ -58,23 +66,48 @@ export function useAnalysis(onFinished?: () => void) {
     return () => s.close()
   }, [])
 
-  /** `keep`: one colour plays `moves` moves in a row (Keep color); KataGo's lines are those moves. */
-  const start = useCallback((game: GameState, seconds: number, keep?: { color: Color; moves: number } | null) => {
+  const send = useCallback((key: string, target: Record<string, unknown>, params: Record<string, unknown>) => {
     const requestId = `r${++seq.current}-${Date.now() % 100000}`
-    current.current = { requestId, revision: game.revision }
+    current.current = { requestId, key }
     setResult(null)
-    setForRevision(null)
+    setForKey(null)
     setError(null)
     setWarning(null)
     setStatus('running')
-    sock.current?.analyze(requestId, toApiPosition(game, keep?.color), {
-      max_time: seconds,
-      include_ownership: true,
-      report_every: 0.5,
-      pv_len: 20,
-      same_color_moves: keep ? keep.moves : 1,
-    })
+    sock.current?.analyze(requestId, target, params)
   }, [])
+
+  /** `keep`: one colour plays `moves` moves in a row (Keep color); KataGo's lines are those moves. */
+  const start = useCallback(
+    (game: GameState, seconds: number, keep?: { color: Color; moves: number } | null) =>
+      send(
+        stdKey(game.revision),
+        { position: toApiPosition(game, keep?.color) },
+        {
+          max_time: seconds,
+          include_ownership: true,
+          report_every: 0.5,
+          pv_len: 20,
+          same_color_moves: keep ? keep.moves : 1,
+        },
+      ),
+    [send],
+  )
+
+  /** A bonus game, analysed by the server from its own record of the game (never a client copy). */
+  const startBonus = useCallback(
+    (gameId: string, revision: number, source: BonusSource, seconds: number) =>
+      send(
+        bonusKey(gameId, revision),
+        {
+          variant: { gameId, revision },
+          source: source === 'katago' ? 'katago' : 'variant',
+          ...(source === 'katago' ? {} : { evaluator: source }),
+        },
+        { max_time: seconds, include_ownership: source === 'katago', report_every: 0.5, pv_len: 20 },
+      ),
+    [send],
+  )
 
   const stop = useCallback(() => {
     const cur = current.current
@@ -87,7 +120,7 @@ export function useAnalysis(onFinished?: () => void) {
     if (cur) sock.current?.cancel(cur.requestId)
     current.current = null
     setResult(null)
-    setForRevision(null)
+    setForKey(null)
     setError(null)
     setWarning(null)
     setStatus('idle')
@@ -95,5 +128,5 @@ export function useAnalysis(onFinished?: () => void) {
 
   const reconnect = useCallback(() => sock.current?.reconnect(), [])
 
-  return { status, result, error, warning, connection, forRevision, start, stop, invalidate, reconnect }
+  return { status, result, error, warning, connection, forKey, start, startBonus, stop, invalidate, reconnect }
 }

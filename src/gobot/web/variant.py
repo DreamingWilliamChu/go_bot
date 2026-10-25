@@ -194,6 +194,31 @@ def build_router(settings: Settings) -> tuple[APIRouter, GameStore]:
         store.save(game)
         return game_view(game, [])
 
+    @router.get("/evaluators")
+    async def evaluators() -> dict[str, Any]:
+        """Analysis sources for bonus positions (docs/BONUS_GO.md §8)."""
+        from gobot.variant.models.registry import list_models
+
+        katago = settings.find_katago() is not None
+        return {
+            "sources": [
+                {"id": "katago", "label": "Standard KataGo", "available": katago, "approximate": True},
+                {
+                    "id": "katago-net",
+                    "label": "Bonus search · KataGo network",
+                    "available": katago,
+                    "approximate": True,
+                },
+                {
+                    "id": "heuristic",
+                    "label": "Bonus search · heuristic",
+                    "available": True,
+                    "approximate": True,
+                },
+            ],
+            "models": [m.public() for m in list_models(settings.variant_dir)],
+        }
+
     @router.get("/games/{game_id}/export")
     async def export(game_id: str) -> dict[str, Any]:
         return game_to_json(get_game(game_id), private=False)

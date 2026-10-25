@@ -28,6 +28,7 @@ import {
 } from '../game/game'
 import type { KeepRound, Point } from '../game/keepRound'
 import { exportSgf, importSgf } from '../game/sgf'
+import { stdKey } from '../analysis/useAnalysis'
 
 type Palette = 'B' | 'W' | 'erase' | 'cycle'
 
@@ -37,7 +38,7 @@ export interface AnalysisBundle {
   error: string | null
   warning: string | null
   connection: string
-  forRevision: number | null
+  forKey: string | null
 }
 
 interface Props {
@@ -89,7 +90,7 @@ export function BoardScreen(p: Props) {
   }, [game, board])
 
   // Only show analysis that belongs to this exact position.
-  const result = p.analysis.forRevision === game.revision ? p.analysis.result : null
+  const result = p.analysis.forKey === stdKey(game.revision) ? p.analysis.result : null
   const resultPv = pvSel && result ? result.candidates[pvSel.cand] : null
   // Keep color: predictions for the moves left in this round. Ones kept from before stay where
   // they were (unless filled since); otherwise the best line of the latest analysis.
