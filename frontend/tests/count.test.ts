@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { countMethod, countSettled } from '../src/game/count'
 import type { Stone } from '../src/game/game'
@@ -77,4 +79,25 @@ describe('settled count', () => {
     expect(r.black.total).toBe(81)
     expect(r.lead).toBe(73.5)
   })
+})
+
+// The same area-scoring cases as the Python variant scorer (tests/fixtures/variant/scoring_cases.json).
+describe('area counting matches the variant scorer', () => {
+  const file = fileURLToPath(new URL('../../tests/fixtures/variant/scoring_cases.json', import.meta.url))
+  const { cases } = JSON.parse(readFileSync(file, 'utf8')) as {
+    cases: { name: string; rows: string[]; komi: number; black_area: number; white_area: number; black_stones: number; white_stones: number; lead: number }[]
+  }
+  for (const c of cases) {
+    it(c.name, () => {
+      const stones: Stone[] = c.rows.flatMap((row, y) =>
+        [...row].flatMap((ch, x): Stone[] => (ch === 'X' ? [{ color: 'B', x, y }] : ch === 'O' ? [{ color: 'W', x, y }] : [])),
+      )
+      const r = countSettled(stones, c.rows.length, 'chinese', c.komi)
+      expect(r.black.stones).toBe(c.black_stones)
+      expect(r.white.stones).toBe(c.white_stones)
+      expect(r.black.total).toBe(c.black_area)
+      expect(r.white.total).toBe(c.white_area)
+      expect(r.lead).toBeCloseTo(c.lead)
+    })
+  }
 })

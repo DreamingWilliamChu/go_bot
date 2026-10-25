@@ -1,0 +1,41 @@
+{
+  "_doc": "Area scoring cases shared by tests/variant/test_scoring.py and frontend/tests/count.test.ts. Rows: X Black, O White, . empty; top row first. area = stones + empty points bordered only by that colour; lead = black_area - (white_area + komi).",
+  "cases": [
+    {
+      "name": "empty board: nobody owns anything",
+      "rows": [".....", ".....", ".....", ".....", "....."],
+      "komi": 7.5,
+      "black_stones": 0, "white_stones": 0, "black_area": 0, "white_area": 0, "lead": -7.5
+    },
+    {
+      "name": "one black stone owns the whole board",
+      "rows": [".....", ".....", "..X..", ".....", "....."],
+      "komi": 7.5,
+      "black_stones": 1, "white_stones": 0, "black_area": 25, "white_area": 0, "lead": 17.5
+    },
+    {
+      "name": "split board with a neutral column",
+      "rows": ["XX.OO", "XX.OO", "XX.OO", "XX.OO", "XX.OO"],
+      "komi": 0.5,
+      "black_stones": 10, "white_stones": 10, "black_area": 10, "white_area": 10, "lead": -0.5
+    },
+    {
+      "name": "walls with territory; stones are not counted twice",
+      "rows": [".X.O.", ".X.O.", ".X.O.", ".X.O.", ".X.O."],
+      "komi": 7.5,
+      "black_stones": 5, "white_stones": 5, "black_area": 10, "white_area": 10, "lead": -7.5
+    },
+    {
+      "name": "dead-looking stone is still counted as it stands",
+      "rows": ["XXXXX", "X...X", "X.O.X", "X...X", "XXXXX"],
+      "komi": 7.5,
+      "black_stones": 16, "white_stones": 1, "black_area": 16, "white_area": 1, "lead": 7.5
+    },
+    {
+      "name": "integer komi draw",
+      "rows": ["X.O", "X.O", "X.O"],
+      "komi": 0,
+      "black_stones": 3, "white_stones": 3, "black_area": 3, "white_area": 3, "lead": 0
+    }
+  ]
+}

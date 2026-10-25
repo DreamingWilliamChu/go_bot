@@ -226,14 +226,14 @@ def normalize_response(
             pv.append(step)
             color = _other(color)
         if same_color_moves > 1:
-            own = []
+            mine: list[dict[str, Any]] = []
             for i, step in enumerate(pv[: 2 * same_color_moves - 1]):
                 if i % 2:
                     if not step["pass"]:
                         break
                 else:
-                    own.append(step)
-            pv = own
+                    mine.append(step)
+            pv = mine
         cands.append(
             {
                 **v,
