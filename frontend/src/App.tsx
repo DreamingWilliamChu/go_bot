@@ -21,7 +21,7 @@ interface Prefs {
   customSeconds: number
   showOwnership: boolean
   autoAnalyze: boolean
-  keepMoves: number // Keep color: how many moves in a row the analysis shows
+  keepMoves: number // Keep color: how many moves ahead the analysis shows (look-ahead window)
 }
 
 const DEFAULT_PRESETS: Preset[] = [
@@ -55,8 +55,16 @@ function loadGame(): GameState {
 export function App() {
   const [tab, setTab] = useState<Tab>(() => (location.hash.startsWith('#photo') ? 'photo' : 'board'))
   const [game, setGameState] = useState<GameState>(loadGame)
-  // Keep color: while set, every move is played by this colour instead of alternating.
-  const [keepColor, setKeepColor] = useState<Color | null>(null)
+  // Keep color: while set, every move is played by this colour instead of alternating, until the
+  // button is tapped again (a manual lock without a move limit; kept across reloads).
+  const [keepColor, setKeepColorState] = useState<Color | null>(() => {
+    const k = loadRaw<{ color: Color | null }>('gobot.keep.v1')?.color
+    return k === 'B' || k === 'W' ? k : null
+  })
+  const setKeepColor = useCallback((c: Color | null) => {
+    setKeepColorState(c)
+    save('gobot.keep.v1', { color: c })
+  }, [])
   const [keepRound, setKeepRound] = useState<KeepRound>(FRESH_ROUND)
   const toMove = keepColor ?? nextPlayer(game)
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs)
@@ -247,6 +255,7 @@ export function App() {
           {tab === 'board' ? (
             <span class={keepColor ? 'to-play keep' : 'to-play'} data-testid="to-play">
               <span class={`dot ${toMove}`} /> {colorName(toMove)} to play
+              {keepColor ? <span class="lock-note"> · kept (manual)</span> : null}
             </span>
           ) : null}
         </div>
@@ -288,15 +297,9 @@ export function App() {
             }}
             keepRound={keepRound}
             advanceKeep={(shown: Point[], played: Point | null) => {
-              // Also called right before a setGame, which asks for the moves left.
+              // Also called right before a setGame, which asks for the moves left in the round. The
+              // lock stays on (no move limit); only the look-ahead round starts again.
               const next = advanceRound(keepRound, shown, played, prefs.keepMoves)
-              if (!next) {
-                // Moves in a row used up: back to alternating, so the opponent plays next.
-                setKeepColor(null)
-                setKeepRound(FRESH_ROUND)
-                keepRef.current = null
-                return
-              }
               setKeepRound(next)
               if (keepColor) keepRef.current = { color: keepColor, moves: prefs.keepMoves - next.done }
             }}

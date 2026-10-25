@@ -315,12 +315,12 @@ export function BoardScreen(p: Props) {
                 aria-pressed={keepColor !== null}
                 title={
                   keepColor
-                    ? `Move ${p.keepRound.done + 1} of ${p.keepMoves} in a row. Tap to turn colours back to alternating`
-                    : `Let ${colorName(toMove)} play ${p.keepMoves} moves in a row`
+                    ? `${colorName(keepColor)} keeps playing until you tap again (no move limit). Tap to turn colours back to alternating`
+                    : `Let ${colorName(toMove)} keep playing, move after move, until you tap again`
                 }
                 data-testid="keep-color"
               >
-                {keepColor ? `Keep ${colorName(keepColor)} ${p.keepRound.done + 1}/${p.keepMoves}` : `Keep ${colorName(toMove)}`}
+                {keepColor ? `Keep ${colorName(keepColor)} · manual` : `Keep ${colorName(toMove)}`}
               </button>
             </div>
             <div class="toolbar">
@@ -375,7 +375,7 @@ export function BoardScreen(p: Props) {
               idPrefix="setup"
             />
             <fieldset class="field">
-              <legend>Keep color: moves in a row to analyse</legend>
+              <legend>Keep color: moves to look ahead in the analysis</legend>
               <div class="seg">
                 {[1, 2, 3, 4, 5, 6].map((n) => (
                   <button

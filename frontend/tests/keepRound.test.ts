@@ -20,8 +20,12 @@ describe('keep color rounds', () => {
     expect(advanceRound(FRESH_ROUND, shown, null, 3)).toEqual({ done: 1, frozen: null })
   })
 
-  it('is used up after the last move of a round', () => {
-    expect(advanceRound({ done: 2, frozen: [shown[2]] }, [shown[2]], { x: 3, y: 15 }, 3)).toBeNull()
-    expect(advanceRound(FRESH_ROUND, shown, null, 1)).toBeNull()
+  it('starts a fresh round after the last move of a round (the lock has no move limit)', () => {
+    expect(advanceRound({ done: 2, frozen: [shown[2]] }, [shown[2]], { x: 3, y: 15 }, 3)).toEqual(FRESH_ROUND)
+    expect(advanceRound(FRESH_ROUND, shown, null, 1)).toEqual(FRESH_ROUND)
+    // many moves in a row: never released, rounds keep cycling
+    let r = FRESH_ROUND
+    for (let i = 0; i < 20; i++) r = advanceRound(r, [], { x: i % 9, y: 0 }, 3)
+    expect(r).toEqual({ done: 20 % 3, frozen: null })
   })
 })
