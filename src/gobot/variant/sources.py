@@ -18,7 +18,27 @@ from gobot.variant.models.katago_eval import evaluator_config_settings
 from gobot.variant.rules import COLOR_NAMES
 from gobot.variant.state import VariantState
 
-EVALUATOR_NET = "tf2-b10c384"  # the light network: fast one-visit answers, little memory
+EVALUATOR_NET = "tf2-b10c384"  # without a benchmark: the light network (little memory)
+
+
+def fastest_benchmarked_net(settings: Any) -> str | None:
+    """The network ``scripts/benchmark.sh`` measured fastest on this computer (one-visit queries are
+    bound by raw network speed), or None without a benchmark report."""
+    import json
+
+    try:
+        rep = json.loads((settings.data_dir / "benchmark" / "report.json").read_text())
+    except (OSError, ValueError):
+        return None
+    best: tuple[float, str] | None = None
+    for r in rep.get("results", []):
+        b = r.get("benchmark") or {}
+        v = b.get("best_visits_per_s")
+        if b.get("ok") and isinstance(v, (int, float)) and (best is None or v > best[0]):
+            best = (float(v), str(r.get("model_id")))
+    return best[1] if best else None
+
+
 KATAGO_SOURCE_NOTE = (
     "Standard KataGo on the current board: it ignores future bonuses. To show this turn's remaining moves "
     "it lets the opponent only pass inside its search (artificial passes)."
@@ -31,7 +51,8 @@ def katago_evaluator_spec(engine_service: Any) -> dict[str, Any] | None:
     binary = s.find_katago()
     if not binary:
         return None
-    net, path = resolve_model(EVALUATOR_NET, engine_service.manifest, engine_service.model_dirs)
+    want = fastest_benchmarked_net(s) or EVALUATOR_NET
+    net, path = resolve_model(want, engine_service.manifest, engine_service.model_dirs)
     if path is None:
         net, path = resolve_model(None, engine_service.manifest, engine_service.model_dirs)
     if path is None:

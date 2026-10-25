@@ -87,7 +87,7 @@ the solver's moves, and the training report measures trained networks on 11×11 
 | Source | Engine | Labelled |
 |---|---|---|
 | `katago` | Existing KataGo process; board snapshot with the actor to play, `same_color_moves` = moves left this turn; candidates that violate the variant's superko are dropped | "Standard KataGo (ignores future bonuses)" |
-| `variant` + `katago-net` | Bonus search; leaves evaluated by a second KataGo process (light network, one visit per query, snapshot, policy masked to our legal moves) | approximate (standard-Go evaluator) |
+| `variant` + `katago-net` | Bonus search; leaves evaluated by a second KataGo process (the network `scripts/benchmark.sh` measured fastest on this computer, else the light `tf2-b10c384`; one visit per query, board snapshot, policy masked to our legal moves). On this Mac KataGo answers about 135 such queries per second; repeated positions come from a cache | approximate (standard-Go evaluator) |
 | `variant` + `heuristic` | Bonus search with the heuristic evaluator (no KataGo needed) | approximate |
 | `variant` + `net:<id>` | Bonus search with a trained network (onnxruntime) | trained; offered only for sizes in the model's metadata |
 

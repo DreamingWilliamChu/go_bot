@@ -557,8 +557,8 @@ def write_report(run_dir: Path, final: dict[str, Any]) -> None:
         "",
         "## Generations",
         "",
-        "| gen | stage | games | samples | truncated | B/W wins | mean placements | train steps | policy CE | value BCE | gate score (95% CI) | promoted |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "| gen | stage | games | samples | truncated | B/W wins | mean placements | train steps | policy CE | value BCE | candidate vs best | gate score (95% CI) | promoted |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for h in st["history"]:
         g = str(h["generation"])
@@ -569,7 +569,8 @@ def write_report(run_dir: Path, final: dict[str, Any]) -> None:
         lines.append(
             f"| {g} | {sp.get('stage', '')} | {sp.get('games', '')} | {sp.get('samples', '')} | {sp.get('truncated', '')} | "
             f"{sp.get('black_wins', '')}/{sp.get('white_wins', '')} | {sp.get('mean_placements', 0):.0f} | {tr.get('steps', '')} | "
-            f"{tr.get('policy_ce', float('nan')):.3f} | {tr.get('value_bce', float('nan')):.3f} | {sc} | {h['promoted']} |"
+            f"{tr.get('policy_ce', float('nan')):.3f} | {tr.get('value_bce', float('nan')):.3f} | "
+            f"{h['candidate']} vs {h['previous_best']} | {sc} | {h['promoted']} |"
         )
     lines += [
         "",
@@ -593,11 +594,29 @@ def write_report(run_dir: Path, final: dict[str, Any]) -> None:
             "",
             "## Targeted positions (exact solver ground truth)",
             "",
-            "| category | positions | correct | random-move baseline |",
-            "|---|---|---|---|",
+            "| agent | category | positions | correct | random-move baseline |",
+            "|---|---|---|---|---|",
         ]
-        for cat, r in final["targeted"].items():
-            lines.append(f"| {cat} | {r['n']} | {r['correct']} | {r['random_baseline']:.2f} |")
+        for agent, cats in final["targeted"].items():
+            for cat, r in cats.items():
+                lines.append(f"| {agent} | {cat} | {r['n']} | {r['correct']} | {r['random_baseline']:.2f} |")
+    extras = sorted((run_dir / "eval").glob("extra_*.json"))
+    if extras:
+        lines += [
+            "",
+            "## Additional matches (`gobot variant evaluate`)",
+            "",
+            "| A | B | allocations | visits | games | W | D | L | truncated | score | 95% CI |",
+            "|---|---|---|---|---|---|---|---|---|---|---|",
+        ]
+        for path in extras:
+            m = json.loads(path.read_text())
+            ci = m["ci95"] or (0, 0)
+            allocs = " ".join(f"{a}/{b}" for a, b in m.get("allocations", []))
+            lines.append(
+                f"| {m['a']} | {m['b']} | {allocs} | {m.get('visits', '')} | {m['games']} | {m['wins']} | {m['draws']} | "
+                f"{m['losses']} | {m['truncated']} | {m['score']:.3f} | {ci[0]:.3f}-{ci[1]:.3f} |"
+            )
     (run_dir / "eval" / "report.md").write_text("\n".join(lines) + "\n")
 
 

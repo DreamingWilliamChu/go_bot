@@ -141,6 +141,15 @@ All of the following ran in a Linux cloud VM (x86-64, 4 cores, no GPU):
   - Pairing link in the browser over HTTP LAN.
   - Chromium-to-LAN HTTPS and websockets could not be tested from the browser here because the sandbox network intercepts them; they were tested from Python instead.
 
+Bonus-turn Go (Keep color, Bonus Mode, the bonus search and the variant network) was built and tested on the M3 Pro
+Mac itself:
+
+- Rules fuzzed against a reference implementation, including same-colour runs, plus tests for turns, passes,
+  scoring, randomness, undo, save/load, hidden-schedule isolation and the search.
+- Playwright on iPhone 13, iPhone SE and desktop sizes, alongside all the standard-Go tests above.
+- A one-hour training run; its measured results and limits are in
+  [docs/VARIANT_TRAINING.md](docs/VARIANT_TRAINING.md#6-what-was-run-on-this-mac-25-october-2026).
+
 ## Checklist for your Mac and iPhone
 
 These could not be verified in the cloud. Please check them; each takes a minute or two.

@@ -138,7 +138,108 @@ generation so far) or when the game cap is reached, then runs the final evaluati
 The benchmark's game length comes from an untrained network; distilled and trained networks play several times
 longer games, so the real self-play throughput is lower. The run's own per-generation measurements are below.
 
-RESULTS_PLACEHOLDER
+## 6. What was run on this Mac (25 October 2026)
+
+### CPU smoke test (`smoke_cpu`, run `smoke-1`)
+
+`uv run gobot variant pipeline run --preset smoke_cpu --run smoke-1`: distillation (600 KataGo-labelled 7×7
+positions), 2 generations × 24 self-play games, real optimizer steps, 2 gating matches (12 games each, no promotion
+— as intended, 12 games cannot pass the rule), the full evaluation suite, a KataGo-evaluator match. **64.5 s wall
+time, peak RSS of the main process 784 MB, exit code 0.** The training tests separately prove that weights change,
+that a resumed run reproduces the losses of an uninterrupted one step for step, and that Ctrl+C saves a checkpoint
+that resumes.
+
+### Local experiment (`local_small`, run `local-1`, best model installed as `local-1-gen_003`)
+
+`uv run gobot variant pipeline run --preset local_small --run local-1` on the M3 Pro (8 self-play workers on CPU,
+training on MPS), commit `a485c91`:
+
+- **Distillation**: 24,000 ordinary-Go 11×11 positions labelled with KataGo `tf2-b10c384`'s raw policy in 203 s;
+  800 steps; top-1 agreement with the teacher 44%. This is the only use of KataGo during training.
+- **Self-play**: 9 generations × 640 games = **5,760 games**, 146,533 policy samples, **0 truncated games**,
+  88–101 placements per game, 155–183 s of self-play per generation (≈3.6 games/s with 8 workers).
+- **Training**: 3,085 optimizer steps in total (≈255 per generation, ≈16 s each on MPS), 0 skipped for non-finite
+  gradients. Policy cross-entropy on the replay window fell from 2.52 to 2.36 and top-1 agreement with the search
+  rose from 0.60 to 0.64.
+- **Wall time 68.3 min** — 8 minutes over the 60-minute cap: the cap stops new *generations* (they ended after 39
+  min), but the final evaluation is not cut short, and its match against search with the KataGo-network evaluator
+  alone took 26 min (KataGo answers about 135 one-visit queries/s on this Mac's Metal build; its own benchmark here
+  is 110–165 visits/s). Peak memory of all processes 4.4 GB (median 1.7 GB, 19 processes). Disk: 49 MB for the run
+  (replay 12 MB, checkpoints 25 MB), 750 KB for the installed model.
+
+Gating (candidate vs current best, 50 paired-schedule pairs = 100 games, 32 visits, promotion iff the Wilson 95%
+lower bound > 0.5):
+
+| generation trained after self-play | candidate vs best | score (95% CI) | promoted |
+|---|---|---|---|
+| 0 (ordinary Go) | gen_001 vs gen_000 (distilled) | 0.77 (0.68–0.84) | yes |
+| 1 (1/1) | gen_002 vs gen_001 | 0.48 (0.38–0.58) | no |
+| 2 (1/1) | gen_003 vs gen_001 | 0.67 (0.57–0.75) | yes |
+| 3 (2/2) | gen_004 vs gen_003 | 0.59 (0.49–0.68) | no |
+| 4 (2/2) | gen_005 vs gen_003 | 0.53 (0.43–0.62) | no |
+| 5–8 (mixed) | gen_006 … gen_009 vs gen_003 | 0.53, 0.49, 0.59, 0.53 (lower bounds 0.39–0.49) | no |
+
+So the best network is `gen_003` (after 3 generations, 1,920 games); later candidates were not shown to be better
+with 100 games. A longer run, more visits or more gating games would be needed to resolve gains of a few percent.
+
+Final evaluation of `gen_003` (48 visits per move, 30 pairs = 60 games per opponent on held-out seeds, paired
+schedules, colours alternated, allocations drawn from 0/0, 1/1, 2/2, 3/3, 2/1, 1/2, 3/1, 1/3):
+
+| opponent | games | W–L | score | 95% CI | Elo (95% CI) |
+|---|---|---|---|---|---|
+| random legal moves | 60 | 60–0 | 1.00 | 0.94–1.00 | ≥ +477 |
+| greedy heuristic (documented baseline) | 60 | 60–0 | 1.00 | 0.94–1.00 | ≥ +477 |
+| bonus search + heuristic evaluator | 60 | 60–0 | 1.00 | 0.94–1.00 | ≥ +477 |
+| `gen_000` (distilled only, before self-play) | 60 | 50–10 | 0.83 | 0.72–0.91 | +280 (+164..+395) |
+| `gen_001` (earlier promoted checkpoint) | 60 | 40–20 | 0.67 | 0.54–0.77 | +120 (+28..+213) |
+| same network, bonus inputs hidden and bonus-blind search | 60 | 31–29 | 0.52 | 0.39–0.64 | +12 (−75..+99) |
+| bonus search + KataGo `tf2-b10c384` network as evaluator ("original evaluator") | 30 | 4–26 | 0.13 | 0.05–0.30 | −325 (−500..−150) |
+
+No game ended in a draw (half-point komi) and none was truncated.
+
+**Bonus information in whole games** (`gobot variant evaluate`, 60 pairs, 128 visits, heavier and unequal
+allocations 3/3, 3/1, 1/3, 2/2, 3/0, 0/3):
+
+| A | B | W–L | score | 95% CI |
+|---|---|---|---|---|
+| trained net, bonus-aware search | same net, bonus inputs hidden, bonus-blind search | 60–60 | 0.50 | 0.41–0.59 |
+| heuristic evaluator, bonus-aware search | heuristic evaluator, bonus-blind search | 56–64 | 0.47 | 0.38–0.56 |
+
+**Targeted positions** (50 positions on 11×11: a 5×5 corner inside a settled frame, exact solver ground truth,
+192 visits; `tests/fixtures/variant/targeted_11.json`):
+
+| category | bonus search + trained net | bonus-blind search + net without bonus inputs | bonus search + heuristic | random move |
+|---|---|---|---|---|
+| three-move tactics (bonus now) | 10/10 | 10/10 | 9/10 | 0.38 |
+| survival (opponent's next turn is a certain bonus) | **10/10** | **6/10** | 10/10 | 0.20 |
+| same board, no bonus coming | 10/10 | 10/10 | 10/10 | 0.88 |
+| no bonuses at all | 8/10 | 8/10 | 10/10 | 0.18 |
+| unequal allocations (opponent bonus with P = 1/2) | **9/10** | **6/10** | 10/10 | 0.20 |
+
+### What these results show, and what they do not
+
+- Real training happened: distillation and self-play changed the network, and gated self-play generations beat the
+  distilled starting point (0.83 over 60 games, CI 0.72–0.91) and an earlier checkpoint (0.67, CI 0.54–0.77).
+- The trained network with search is clearly stronger than random play and the heuristic baselines **on 11×11 with
+  these allocations**.
+- It is **much weaker** than the same search using KataGo's network as the evaluator (0.13). KataGo's network
+  judges positions as ordinary Go, so this mainly measures basic Go strength, where KataGo is far ahead.
+- Bonus awareness clearly matters in the targeted positions (survival 10/10 vs 6/10, unequal 9/10 vs 6/10), where
+  the right move depends on the coming bonus. In whole games at this strength and budget, however, neither the
+  trained network nor the heuristic search won measurably more often with bonus information than without it: the
+  intervals are wide and centred near 0.5. Turning tactical correctness into game results probably needs a
+  stronger network and more search; this run does not show it.
+- Nothing here establishes strong play, generalisation to other board sizes or allocations, or that later
+  generations are better than `gen_003`.
+
+### Larger runs (`gpu_long`)
+
+From the measurements above (≈3.6 games/s for 640-game generations with a 190k-parameter network, 64/16 visits, 8
+CPU workers): `gpu_long` uses a ~1.9M-parameter network (≈10× more evaluation cost) and 400/80 visits (≈4×), so on
+the same 8 CPU workers self-play would run at roughly 0.1 games/s. Its 4,000-game generations need a machine
+with many more cores (or a GPU inference server for self-play, which this code does not provide) to finish in its
+48 h cap. Measure with `gobot variant bench --preset gpu_long` on the target machine first. Disk: about 60 bytes per
+replay sample, so its 3M-sample window is about 180 MB.
 
 ## 7. Known approximations and unsupported settings
 

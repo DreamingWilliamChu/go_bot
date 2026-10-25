@@ -26,13 +26,18 @@ def add_parser(sub: Any) -> None:
     )
     e = vs.add_parser("evaluate", help="play a paired match between two agents")
     e.add_argument(
-        "a", help="agent: random | greedy | heuristic | katago | net:<model.onnx> | blind:<model.onnx>"
+        "a",
+        help="agent: random | greedy | heuristic | blind-heuristic | katago | net:<model.onnx> | blind:<model.onnx>",
     )
     e.add_argument("b")
     e.add_argument("--pairs", type=int, default=20)
     e.add_argument("--visits", type=int, default=64)
     e.add_argument("--size", type=int, default=11)
     e.add_argument("--workers", type=int, default=8)
+    e.add_argument(
+        "--allocations", default="0:0,1:1,2:2,3:3,2:1,1:2,3:1,1:3", help="Black:White bonus allocations"
+    )
+    e.add_argument("--out", default=None, help="also write the result as JSON here")
     t = vs.add_parser("targeted", help="build the 11x11 targeted suite, or score a network on it")
     t.add_argument("--src", default="tests/fixtures/variant/targeted.json")
     t.add_argument("--size", type=int, default=11)
@@ -55,6 +60,8 @@ def _agent(spec: str, visits: int, settings: Settings) -> Any:
         return AgentSpec(spec, spec)
     if spec == "heuristic":
         return AgentSpec("search+heuristic", "search", "heuristic", visits=visits)
+    if spec == "blind-heuristic":
+        return AgentSpec("bonus-blind search+heuristic", "search", "heuristic", visits=visits, blind=True)
     if spec == "katago":
         return AgentSpec("search+katago", "search", "katago", visits=visits, katago=_katago(settings))
     kind, _, path = spec.partition(":")
@@ -103,9 +110,13 @@ def run_cli(args: argparse.Namespace, settings: Settings) -> int:
         a, b = _agent(args.a, args.visits, settings), _agent(args.b, args.visits, settings)
         if a.name == b.name:
             b.name += "#2"
-        allocs = [(0, 0), (1, 1), (2, 2), (3, 3), (2, 1), (1, 2), (3, 1), (1, 3)]
+        allocs = [(int(x), int(y)) for x, y in (pair.split(":") for pair in args.allocations.split(","))]
         match = play_match(a, b, args.pairs, args.size, allocs, workers=args.workers)
-        print(json.dumps(match.public(), indent=2))
+        result = {**match.public(), "allocations": allocs, "visits": args.visits, "pairs": args.pairs}
+        print(json.dumps(result, indent=2))
+        if args.out:
+            Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+            Path(args.out).write_text(json.dumps(result, indent=2) + "\n")
         return 0
     if args.vcmd == "targeted":
         from gobot.variant.training.targeted import embedded_suite, embedded_suite_path, run_targeted
