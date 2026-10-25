@@ -1,9 +1,10 @@
 import { useMemo, useRef, useState } from 'preact/hooks'
-import type GoBoard from '@sabaki/go-board'
 import type { AnalysisResult, EngineStatus, Preset } from '../api/client'
 import { AnalysisPanel, type AnalysisStatus, type PvSelection } from '../analysis/AnalysisPanel'
-import { CAND_LABELS, colorName, pct, playerWinrate } from '../analysis/format'
-import { BoardView, type CandidateMark, type PvMark, type Sign } from '../board/BoardView'
+import { colorName } from '../analysis/format'
+import { BoardView, type CandidateMark, type PvMark } from '../board/BoardView'
+import { MovesToolbar } from '../board/MovesToolbar'
+import { boardWithLine, candidateMarks, lockPrediction, overlayLine, signMapOf } from '../board/overlay'
 import { GameSettingsForm } from '../game/GameSettingsForm'
 import {
   type Color,
@@ -48,6 +49,7 @@ interface Props {
   keepRound: KeepRound
   advanceKeep: (shown: Point[], played: Point | null) => void
   keepMoves: number
+  onBonusMode: () => void
   erasing: boolean
   setErasing: (on: boolean, resume?: boolean) => void
   analysis: AnalysisBundle
@@ -64,10 +66,6 @@ interface Props {
   onToggleOwnership: () => void
   onToggleAuto: () => void
   toast: (msg: string) => void
-}
-
-function signMapOf(b: GoBoard): Sign[][] {
-  return b.signMap.map((row) => row.map((v) => (v > 0 ? 1 : v < 0 ? -1 : 0)) as Sign[])
 }
 
 export function BoardScreen(p: Props) {
@@ -97,68 +95,27 @@ export function BoardScreen(p: Props) {
   // they were (unless filled since); otherwise the best line of the latest analysis.
   const prediction: Point[] | null = useMemo(() => {
     if (!keepColor || mode !== 'play' || p.erasing) return null
-    const frozen = p.keepRound.frozen?.filter((q) => board.get([q.x, q.y]) === 0)
-    if (frozen?.length) return frozen
-    const top = result?.candidates[0]
-    if (!top) return null
-    return top.pv
-      .slice(0, p.keepMoves - p.keepRound.done)
-      .flatMap((s) => (s.pass || s.x === null || s.y === null ? [] : [{ x: s.x, y: s.y }]))
+    return lockPrediction(board, result, p.keepRound.frozen, p.keepMoves - p.keepRound.done)
   }, [keepColor, mode, p.erasing, p.keepRound, p.keepMoves, board, result])
 
   // What the board draws on top of the position: a chosen line, else the Keep color predictions
   // (see-through, numbered by their place in the round).
-  const line = useMemo(() => {
-    if (resultPv && pvSel) return { steps: resultPv.pv.slice(0, pvSel.step), first: 1, ghost: false }
-    if (prediction && keepColor)
-      return {
-        steps: prediction.map((q) => ({ ...q, color: keepColor, pass: false })),
-        first: p.keepRound.done + 1,
-        ghost: true,
-      }
-    return null
-  }, [resultPv, pvSel, prediction, keepColor, p.keepRound.done])
+  const line = useMemo(
+    () => overlayLine(resultPv, pvSel, prediction, keepColor, p.keepRound.done + 1),
+    [resultPv, pvSel, prediction, keepColor, p.keepRound.done],
+  )
 
-  const view = useMemo(() => {
+  const view = useMemo((): { signMap: ReturnType<typeof signMapOf>; pv: PvMark[] } => {
     if (mode === 'setup' && draft) {
       const g = fromSetup(draft)
-      return { signMap: signMapOf(currentBoard(g)), pv: [] as PvMark[] }
+      return { signMap: signMapOf(currentBoard(g)), pv: [] }
     }
-    if (line) {
-      let b = board
-      const placed: PvMark[] = []
-      line.steps.forEach((s, i) => {
-        if (s.pass || s.x === null || s.y === null) return
-        try {
-          b = b.makeMove(sign(s.color), [s.x, s.y])
-        } catch {
-          return
-        }
-        placed.push({ x: s.x, y: s.y, color: s.color, n: line.first + i, ghost: line.ghost })
-      })
-      const sm = signMapOf(b)
-      // drop numbers of PV stones that were captured later in the line
-      const pv = placed.filter((m) => sm[m.y][m.x] === (m.color === 'B' ? 1 : -1))
-      // predictions are drawn see-through over the position as it is
-      return { signMap: line.ghost ? signMapOf(board) : sm, pv }
-    }
-    return { signMap: signMapOf(board), pv: [] as PvMark[] }
+    return boardWithLine(board, line)
   }, [mode, draft, board, line])
 
   const candMarks: CandidateMark[] = useMemo(() => {
-    if (!result || pvSel || keepColor || mode !== 'play' || !result.currentPlayer) return []
-    const player = result.currentPlayer
-    return result.candidates
-      .slice(0, 3)
-      .map((c, i) => ({ c, i }))
-      .filter(({ c }) => !c.pass && c.x !== null && c.y !== null)
-      .map(({ c, i }) => ({
-        x: c.x as number,
-        y: c.y as number,
-        label: CAND_LABELS[i],
-        rank: i,
-        sub: game.setup.size <= 13 ? pct(playerWinrate(c.blackWinrate, player), 0) : undefined,
-      }))
+    if (pvSel || keepColor || mode !== 'play') return []
+    return candidateMarks(result, game.setup.size)
   }, [result, pvSel, keepColor, mode, game.setup.size])
 
   const deadInDraft = useMemo(() => {
@@ -292,37 +249,27 @@ export function BoardScreen(p: Props) {
                 Move {moveCount(game)} · captures B {caps.B} / W {caps.W}
               </span>
             </div>
-            <div class="toolbar moves">
-              <button class="btn" onClick={() => onHistory(undo(game))} disabled={!game.moves.length}>
-                Undo
-              </button>
-              <button
-                class="btn"
-                onClick={() => {
-                  if (keepColor) p.advanceKeep(prediction ?? [], null)
-                  setGame(pass(game, toMove))
-                }}
-                data-testid="pass"
-              >
-                Pass
-              </button>
-              <button class="btn" onClick={() => onHistory(redo(game))} disabled={!game.redo.length}>
-                Redo
-              </button>
-              <button
-                class={`btn keep-color ${keepColor ?? toMove}${keepColor ? ' on' : ''}`}
-                onClick={() => setKeepColor(keepColor ? null : toMove)}
-                aria-pressed={keepColor !== null}
-                title={
-                  keepColor
-                    ? `${colorName(keepColor)} keeps playing until you tap again (no move limit). Tap to turn colours back to alternating`
-                    : `Let ${colorName(toMove)} keep playing, move after move, until you tap again`
-                }
-                data-testid="keep-color"
-              >
-                {keepColor ? `Keep ${colorName(keepColor)} · manual` : `Keep ${colorName(toMove)}`}
-              </button>
-            </div>
+            <MovesToolbar
+              canUndo={game.moves.length > 0}
+              canRedo={game.redo.length > 0}
+              onUndo={() => onHistory(undo(game))}
+              onPass={() => {
+                if (keepColor) p.advanceKeep(prediction ?? [], null)
+                setGame(pass(game, toMove))
+              }}
+              onRedo={() => onHistory(redo(game))}
+              keep={{
+                color: keepColor ?? toMove,
+                on: keepColor !== null,
+                label: keepColor ? `Keep ${colorName(keepColor)} · manual` : `Keep ${colorName(toMove)}`,
+                title: keepColor
+                  ? `${colorName(keepColor)} keeps playing until you tap again (no move limit). Tap to turn colours back to alternating`
+                  : `Let ${colorName(toMove)} keep playing, move after move, until you tap again`,
+                onClick: () => setKeepColor(keepColor ? null : toMove),
+              }}
+              bonusOn={false}
+              onBonus={p.onBonusMode}
+            />
             <div class="toolbar">
               <button class="btn" onClick={enterSetup} data-testid="edit-position">
                 Edit position

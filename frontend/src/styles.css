@@ -904,3 +904,118 @@ video.live {
 .account-actions {
   margin-top: 12px;
 }
+
+/* ---------------------------------------------------------------- bonus-turn Go */
+/* Keep color and Bonus Mode side by side, in their own row so phones never overflow. */
+.toolbar.locks {
+  flex-wrap: nowrap;
+  margin-bottom: 6px;
+}
+.toolbar.locks .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 46px;
+  white-space: normal;
+  line-height: 1.2;
+}
+.btn.bonus-mode.on {
+  background: #6b3fa0;
+  color: #fff;
+  border: 2px solid #4c2a78;
+  box-shadow: 0 0 0 3px #6b3fa055;
+}
+/* In Bonus Mode Keep color is an indicator: only a bonus turn switches it on. */
+.btn.keep-color.read-only {
+  cursor: help;
+}
+.btn.keep-color.read-only:not(.on) {
+  background: var(--panel);
+  color: var(--muted);
+  border-style: dashed;
+  border-color: var(--line);
+}
+.btn.on-soft {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn.wide {
+  width: 100%;
+  margin-bottom: 10px;
+}
+.lock-note {
+  font-weight: 500;
+}
+.bonus-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  margin-bottom: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  font-weight: 650;
+  text-align: center;
+  line-height: 1.25;
+}
+.bonus-banner.active {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-color: #c99a00;
+}
+.bonus-banner.announce {
+  background: #ffd84d;
+  color: #3d2e00;
+  border-color: #c99a00;
+  font-weight: 750;
+}
+.bonus-banner .dot {
+  flex: none;
+}
+.bonus-status {
+  display: grid;
+  gap: 2px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+.bonus-status.active {
+  background: var(--warn-bg);
+  border-color: #c99a00;
+}
+.bonus-result {
+  margin-top: 8px;
+}
+.bonus-settings .field-row.three {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 16px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.45);
+}
+.modal {
+  width: 100%;
+  max-width: 480px;
+  margin: 3vh 0 24px;
+}
+.modal h2 {
+  margin: 0 0 8px;
+  font-size: 1.15rem;
+}
+.modal .row {
+  justify-content: flex-end;
+  margin-top: 8px;
+}
