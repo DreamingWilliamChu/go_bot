@@ -156,3 +156,49 @@ def game_from_json(d: dict[str, Any]) -> VariantGame:
     if d.get("commitment") and d["commitment"] != game.commitment:
         raise RecordError("schedule commitment mismatch")
     return game
+
+
+def game_from_export(d: dict[str, Any], seed: int | None = None) -> VariantGame:
+    """Open an *exported* record (no schedule) as a new game with the same history.
+
+    The recorded turn starts fix the past exactly; the future bonuses are drawn afresh from their
+    conditional distribution given the public counts at the end of the record (so the opened game is
+    a new game, with a new commitment)."""
+    import random
+    import secrets
+
+    from gobot.variant.randomness import sample_conditional
+
+    if d.get("format") != FORMAT or d.get("version") != VERSION:
+        raise RecordError("not a version-1 bonus-turn Go game record")
+    try:
+        config = VariantConfig.model_validate(d["config"])
+        initial = state_from_json(d["initial"], config)
+        n = config.size
+        actions = [decode_action(a, n) for a in d["actions"]]
+        past: dict[str, set[int]] = {"B": set(), "W": set()}
+        last_seen = {"B": 0, "W": 0}
+        for e in d.get("events", []):
+            if e.get("type") == "turn_start":
+                last_seen[e["player"]] = max(last_seen[e["player"]], int(e["turnIndex"]))
+                if e["bonus"]:
+                    past[e["player"]].add(int(e["turnIndex"]))
+        # replay the past with exactly the recorded triggers (nothing after them is bonus yet)
+        probe = VariantGame(initial, HiddenSchedule(frozenset(past["B"]), frozenset(past["W"])), 0, "")
+        for a in actions:
+            probe.play(a)
+        if probe.env.events != d.get("events", probe.env.events):
+            raise RecordError("recorded events do not match the moves")
+        s = probe.state
+        seed = secrets.randbits(63) if seed is None else seed
+        rng = random.Random(seed)
+        future = sample_conditional(s.remaining, s.turns_started, config.horizon, rng)
+        schedule = HiddenSchedule(frozenset(past["B"]) | future.black, frozenset(past["W"]) | future.white)
+        game = VariantGame(initial, schedule, seed, f"{rng.getrandbits(128):032x}", provenance="import")
+        for a in actions:
+            game.play(a)
+    except RecordError:
+        raise
+    except Exception as e:
+        raise RecordError(f"game record does not load: {e}") from e
+    return game

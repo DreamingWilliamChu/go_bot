@@ -7,6 +7,7 @@ Everything the app writes lives under ``data/`` (git-ignored); downloaded weight
 * ``GOBOT_KATAGO_BIN`` - KataGo executable
 * ``GOBOT_MODEL`` - model id from models/manifest.json or a path to a ``.bin.gz``
 * ``GOBOT_FRONTEND_DIST`` - built frontend directory
+* ``GOBOT_VARIANT_DIR`` - bonus-turn Go games, variant networks and training runs (default data/variant)
 """
 
 from __future__ import annotations
@@ -89,6 +90,12 @@ class Settings:
     @property
     def user_testset_dir(self) -> Path:
         return self.data_dir / "user_testset"
+
+    @property
+    def variant_dir(self) -> Path:
+        """Bonus-turn Go games, variant networks and training runs (``GOBOT_VARIANT_DIR``)."""
+        env = os.environ.get("GOBOT_VARIANT_DIR")
+        return Path(env) if env else self.data_dir / "variant"
 
     def extra_model_dirs(self) -> list[Path]:
         return [Path(p) for p in HOMEBREW_SHARE_DIRS if Path(p).is_dir()]

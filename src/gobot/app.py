@@ -252,6 +252,11 @@ def create_app(
 
     attach_photos(app, settings)
 
+    # ------------------------------------------------------------------ bonus-turn Go games
+    from gobot.web.variant import attach as attach_variant
+
+    attach_variant(app, settings)
+
     # ------------------------------------------------------------------ sign-in, account, tunnel
     from gobot.web.account import attach as attach_account
 
