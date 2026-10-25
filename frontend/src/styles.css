@@ -205,15 +205,60 @@ h3 {
 .board-screen {
   grid-template-columns: minmax(0, 1fr);
 }
+.split-handle {
+  display: none;
+}
 @media (min-width: 900px) {
+  /* the middle track is the draggable bar (SplitHandle), which sets --split-l / --split-r */
   .board-screen,
   .photo-screen.two-col {
-    grid-template-columns: minmax(0, 1.25fr) minmax(320px, 1fr);
+    grid-template-columns: minmax(280px, var(--split-l, 1.25fr)) 14px minmax(320px, var(--split-r, 1fr));
+    column-gap: 0;
     align-items: start;
   }
   .side-col {
     position: sticky;
     top: 64px;
+  }
+  .split-handle {
+    display: block;
+    align-self: stretch;
+    position: relative;
+    cursor: col-resize;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    outline: none;
+  }
+  .split-handle::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 6px;
+    width: 2px;
+    border-radius: 1px;
+    background: transparent;
+    transition: background 0.15s;
+  }
+  .split-handle:hover::before,
+  .split-handle:focus-visible::before,
+  .split-handle.dragging::before {
+    background: var(--accent);
+  }
+  .split-handle .grip {
+    position: sticky;
+    top: calc(50vh - 20px);
+    display: block;
+    width: 6px;
+    height: 40px;
+    margin: 0 auto;
+    border-radius: 3px;
+    background: var(--line);
+  }
+  .split-handle:hover .grip,
+  .split-handle.dragging .grip {
+    background: var(--accent);
   }
 }
 .board-col,
@@ -401,7 +446,7 @@ svg.board .hl {
   flex: 1 1 auto;
   min-width: 72px;
 }
-/* Undo / Pass / Redo: their own row, three equal large buttons. */
+/* Undo / Pass / Redo (/ Erase): their own row, equal large buttons. */
 .toolbar.moves {
   flex-wrap: nowrap;
   margin-bottom: 6px;

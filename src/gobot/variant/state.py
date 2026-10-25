@@ -21,7 +21,7 @@ from typing import Any, Literal
 
 from gobot.variant.config import VariantConfig
 from gobot.variant.randomness import check_feasible, modelled_probability, trigger_probability
-from gobot.variant.rules import BLACK, COLOR_NAMES, WHITE, Board, IllegalMove, opponent
+from gobot.variant.rules import BLACK, COLOR_NAMES, EMPTY, WHITE, Board, IllegalMove, opponent
 from gobot.variant.scoring import ScoreResult, area_score
 
 IN_TURN = "in_turn"
@@ -125,6 +125,9 @@ class VariantState:
             return True
         if action == self.config.bonus_action:
             return self.can_grant_bonus
+        point = self.config.erased_point(action)
+        if point is not None:
+            return self.board.at_action(point) != EMPTY
         return action in self.legal_actions()
 
 
@@ -243,7 +246,8 @@ def start_turn(state: VariantState, bonus: bool) -> VariantState:
 
 
 def apply_action(state: VariantState, action: int) -> VariantState:
-    """Play one move (a placement or the pass action) for ``to_move``. Raises IllegalMove."""
+    """Play one move (a placement or the pass action) for ``to_move``, or apply the judge's grant or an
+    erase. Raises IllegalMove."""
     if state.phase != IN_TURN:
         raise IllegalMove("turn", "The game is over." if state.terminal else "No turn is in progress.")
     cfg = state.config
@@ -251,6 +255,9 @@ def apply_action(state: VariantState, action: int) -> VariantState:
         return _end_turn(state)
     if action == cfg.bonus_action:
         return grant_bonus(state)
+    point = cfg.erased_point(action)
+    if point is not None:
+        return erase_stone(state, point)
     color = state.to_move
     board, n_cap = state.board.play(action, color, state.seen)
     caps = (
@@ -302,6 +309,14 @@ def grant_bonus(state: VariantState) -> VariantState:
         else (state.remaining[0], state.remaining[1] - 1)
     )
     return replace(state, bonus_active=True, moves_left=k, turn_moves=k, remaining=remaining)
+
+
+def erase_stone(state: VariantState, point: int) -> VariantState:
+    """Take the stone on ``point`` off the board: an edit, not a move (for example dead stones before
+    the final passes). Whose turn it is, the moves left in it, the bonuses and every counter stay as
+    they are; the new position joins the superko history like any other."""
+    board = state.board.remove(point)
+    return replace(state, board=board, seen=state.seen | {board.hash})
 
 
 def _end_turn(state: VariantState) -> VariantState:

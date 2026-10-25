@@ -320,7 +320,9 @@ export function App() {
     : (sources.find((o) => o.available && o.id !== 'katago')?.id ?? 'heuristic')
 
   // Bonus games: analyse each new position (Auto) with the chosen source; leaving Bonus Mode stops it.
+  // Erase there works as on the standard board: no analysis until it is turned off again.
   const bonusAsked = useRef<string | null>(null)
+  const [bonusErasing, setBonusErasingState] = useState(false)
   const startBonus = useCallback(() => {
     const v = variant.view
     if (!v || v.state.phase === 'terminal') return
@@ -331,6 +333,7 @@ export function App() {
     if (!inBonus) {
       if (bonusAsked.current !== null) analysis.invalidate()
       bonusAsked.current = null
+      setBonusErasingState(false)
       return
     }
     if (!v || !evaluators) return
@@ -338,7 +341,7 @@ export function App() {
     if (bonusAsked.current === key) return
     bonusAsked.current = key
     analysis.invalidate()
-    if (prefs.autoAnalyze && v.state.phase !== 'terminal') startBonus()
+    if (prefs.autoAnalyze && !bonusErasing && v.state.phase !== 'terminal') startBonus()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inBonus, variant.view?.gameId, variant.view?.revision, bonusSource, evaluators])
 
@@ -477,6 +480,12 @@ export function App() {
                 void runBonus(async () => variantApi.open(JSON.parse(await file.text()) as unknown))
               }
               toast={toast}
+              erasing={bonusErasing}
+              setErasing={(on, resume = true) => {
+                setBonusErasingState(on)
+                if (on) analysis.invalidate()
+                else if (resume && prefs.autoAnalyze) startBonus()
+              }}
               analysis={analysis}
               engine={status?.engine ?? null}
               presets={presets}

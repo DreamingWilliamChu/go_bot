@@ -88,6 +88,30 @@ test('a pass ends a bonus turn; two pass-only turns end the game', async ({ page
   await expect(page.getByTestId('bonus-result')).toContainText('Bonus schedule (now revealed): Black turns 1')
 })
 
+test('erase: the stone goes, the turn and its moves left stay; undo brings it back', async ({ page }) => {
+  await newBonusGame(page, { size: 9, black: 2, white: 0, horizon: 2 })
+  const stones = page.locator('svg.board').first().locator('circle.stone-b, circle.stone-w')
+  const turn = page.getByTestId('bonus-turn')
+  await tapPoint(page, 9, 2, 2)
+  await expect(turn).toContainText('Black bonus turn — 2 moves remaining')
+  await expect(stones).toHaveCount(1)
+  const erase = page.getByTestId('erase')
+  await erase.click()
+  await expect(erase).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('checkbox', { name: 'Auto' })).toBeDisabled()
+  await tapPoint(page, 9, 2, 2)
+  await expect(stones).toHaveCount(0)
+  // an erase is not a move
+  await expect(turn).toContainText('Black bonus turn — 2 moves remaining')
+  await expect(page.getByText('Move 1')).toBeVisible()
+  await page.getByRole('button', { name: 'Undo' }).click()
+  await expect(stones).toHaveCount(1)
+  await erase.click()
+  await expect(erase).toHaveAttribute('aria-pressed', 'false')
+  await tapPoint(page, 9, 3, 2)
+  await expect(turn).toContainText('Black bonus turn — 1 move remaining')
+})
+
 test('Bonus Mode never changes the standard game; manual Keep returns when it is off', async ({ page }) => {
   await tapPoint(page, 19, 3, 3) // a standard move
   await newBonusGame(page, { black: 1, white: 1, horizon: 30 })
@@ -165,8 +189,9 @@ test('judge: Keep color grants a bonus before the first move; analysis never sug
   // nothing happens by itself: the turn starts normal and the judge may grant a bonus
   await expect(page.getByTestId('bonus-turn')).toContainText('Black to play — normal turn (1 move)')
   await expect(keep).toHaveText('Grant bonus')
-  // to the players and the analysis the judge's timing is random: a modelled chance is shown
-  await expect(page.getByTestId('bonus-chance')).toContainText('The judge decides; modelled next-turn chance — Black 2/19')
+  // the board shows only the bonuses left, no modelled chance
+  await expect(page.getByTestId('bonuses-left')).toHaveText('Bonuses left — Black: 2 · White: 1')
+  await expect(page.getByTestId('bonus-chance')).toHaveCount(0)
   // and the bonus search never lists a bonus among its moves
   await page.getByRole('radio', { name: /Quick/ }).click()
   await page.getByTestId('source-heuristic').click()

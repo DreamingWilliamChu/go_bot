@@ -1,4 +1,4 @@
-// Undo / Pass / Redo, and below them Keep color with Bonus Mode beside it. Shared by the standard
+// Undo / Pass / Redo / Erase, and below them Keep color with Bonus Mode beside it. Shared by the standard
 // board and the bonus-game board, so the controls sit in the same place in both.
 
 export interface LockButton {
@@ -18,6 +18,7 @@ interface Props {
   onUndo: () => void
   onPass: () => void
   onRedo: () => void
+  erase?: { on: boolean; onClick: () => void }
   keep: LockButton
   bonusOn: boolean
   onBonus: () => void
@@ -37,6 +38,17 @@ export function MovesToolbar(p: Props) {
         <button class="btn" onClick={p.onRedo} disabled={!p.canRedo || p.busy}>
           Redo
         </button>
+        {p.erase ? (
+          <button
+            class={p.erase.on ? 'btn erase on' : 'btn erase'}
+            onClick={p.erase.onClick}
+            aria-pressed={p.erase.on}
+            title={p.erase.on ? 'Stop erasing and analyse again' : 'Tap stones to take them off the board'}
+            data-testid="erase"
+          >
+            {p.erase.on ? 'Erasing' : 'Erase'}
+          </button>
+        ) : null}
       </div>
       <div class="toolbar locks">
         <button

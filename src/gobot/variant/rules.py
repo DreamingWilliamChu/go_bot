@@ -9,7 +9,8 @@ Plain Python, tuned for search and self-play throughput:
   the set of earlier positions (``seen``), whoever was to move.
 
 Colours are ``BLACK = 1`` and ``WHITE = 2``. An *action* is ``y * N + x`` for a placement (``y`` from
-the top, as everywhere in the app) and ``N * N`` for a pass. Who is allowed to move is decided by
+the top, as everywhere in the app) and ``N * N`` for a pass (``VariantConfig`` adds the judge's grant
+and erases). Who is allowed to move is decided by
 ``gobot.variant.state``, not here: this module accepts any colour for any placement, which is what
 consecutive moves by one player need.
 """
@@ -31,7 +32,8 @@ def opponent(color: int) -> int:
 
 
 class IllegalMove(ValueError):
-    """A placement the rules forbid; ``reason`` is one of occupied, suicide, superko, off-board, turn."""
+    """An action the rules forbid; ``reason`` is one of occupied, suicide, superko, off-board, turn,
+    bonus, empty (an erase where there is no stone)."""
 
     def __init__(self, reason: str, message: str):
         super().__init__(message)
@@ -295,6 +297,20 @@ class Board:
         if seen is not None and h in seen:
             raise IllegalMove("superko", "Superko: that would repeat an earlier position.")
         return Board(geo, cells, h), n_cap
+
+    def remove(self, action: int) -> Board:
+        """The position without the stone on ``action``: an edit, not a move. Raises IllegalMove for an
+        empty point. Taking a stone off only adds liberties, so the result never has dead chains."""
+        geo = self.geo
+        if not 0 <= action < geo.area:
+            raise IllegalMove("off-board", f"action {action} is not a board point")
+        p = geo.points[action]
+        c = self.cells[p]
+        if c == EMPTY:
+            raise IllegalMove("empty", "There is no stone there to erase.")
+        cells = bytearray(self.cells)
+        cells[p] = EMPTY
+        return Board(geo, cells, self.hash ^ geo.zobrist[c][p])
 
     def legal_actions(
         self, color: int, seen: frozenset[int] | set[int], superko_out: list[int] | None = None

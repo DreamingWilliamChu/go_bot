@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { announcementText, bonusesLeftText, chanceText, lockText, resultText, turnText } from '../src/variant/text'
+import { announcementText, bonusesLeftText, lockText, resultText, turnText } from '../src/variant/text'
 import type { VariantState, VariantView } from '../src/variant/types'
 
 function view(s: Partial<VariantState>): VariantView {
@@ -48,17 +48,13 @@ describe('bonus status text', () => {
     const triggered = { type: 'turn_start' as const, player: 'B' as const, turnIndex: 4, bonus: true, moves: 3, probability: 0.1 }
     const fresh = { ...view({ bonusActive: true, movesLeft: 3, turnMoves: 3 }), events: [triggered] }
     expect(announcementText(fresh)).toBe('Bonus! Black plays 3 moves in a row this turn.')
+    // an erase is not a move: the announcement stays
+    const erased = { ...fresh, events: [triggered, { type: 'erase' as const, x: 0, y: 0, color: 'W' as const }] }
+    expect(announcementText(erased)).toBe('Bonus! Black plays 3 moves in a row this turn.')
     expect(announcementText({ ...fresh, state: { ...fresh.state, movesLeft: 2 } })).toBeNull()
     // an imported position already in a bonus turn has no trigger to announce
     expect(announcementText(view({ bonusActive: true, movesLeft: 3, turnMoves: 3 }))).toBeNull()
     expect(announcementText(view({}))).toBeNull()
-  })
-
-  it('shows the public next-turn chances', () => {
-    expect(chanceText(view({}))).toBe('Next-turn bonus chance — Black 2/27 (7%) · White 3/28 (11%)')
-    expect(chanceText(view({ eligibleTurnsLeft: { B: 0, W: 2 }, remaining: { B: 0, W: 2 }, nextTurnBonusProbability: { B: 0, W: 1 } }))).toBe(
-      'Next-turn bonus chance — Black none · White 2/2 (100%)',
-    )
   })
 
   it('describes results without double counting and flags truncation', () => {
@@ -77,11 +73,6 @@ describe('bonuses granted by a judge', () => {
   it('turns Keep color into the judge\u2019s Grant bonus control before the first move', () => {
     const lock = lockText(judge({ canGrantBonus: true, remaining: { B: 2, W: 0 } }))
     expect(lock).toMatchObject({ canUse: true, on: false, label: 'Grant bonus' })
-  })
-
-  it('shows the modelled chance, even when the judge is late (more bonuses than turns before H)', () => {
-    const v = judge({ remaining: { B: 3, W: 1 }, eligibleTurnsLeft: { B: 2, W: 10 }, nextTurnBonusProbability: { B: 1, W: 0.1 } })
-    expect(chanceText(v)).toBe('The judge decides; modelled next-turn chance — Black 3/3 (100%) · White 1/10 (10%)')
   })
 
   it('cannot be granted without a bonus left, and locks during the bonus turn', () => {

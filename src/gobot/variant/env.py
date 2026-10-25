@@ -64,6 +64,20 @@ class Environment:
         before = self.state
         after = apply_action(before, action)
         n = before.config.size
+        point = before.config.erased_point(action)
+        if point is not None:
+            # an edit, not a move: the turn and its moves left are unchanged, so nothing to resolve
+            self.state = after
+            self.actions.append(action)
+            self.events.append(
+                {
+                    "type": "erase",
+                    "x": point % n,
+                    "y": point // n,
+                    "color": COLOR_NAMES[before.board.at_action(point)],
+                }
+            )
+            return self.events[n0:]
         if action == before.config.bonus_action:
             # judge trigger: the judge granted a bonus on this turn (announced before a move)
             self.state = after

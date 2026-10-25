@@ -10,6 +10,7 @@ import { CornerEditor } from '../photo/CornerEditor'
 import { defaultCorners, isConvex, type Pt } from '../photo/homography'
 import { LiveCamera } from '../photo/LiveCamera'
 import { IDENTITY, type Orient, boardToDisplay, mirror, rotateCW, toDisplay, toPhoto } from '../photo/transform'
+import { SplitHandle } from './SplitHandle'
 
 interface Props {
   defaults: Setup
@@ -389,6 +390,7 @@ export function PhotoScreen({ defaults, status, toast, onConfirmed }: Props) {
             </button>
           </div>
         </section>
+        <SplitHandle name="photo" />
         <section class="panel">
           <h2>Correct the position</h2>
           {rec.messages.map((m) => (

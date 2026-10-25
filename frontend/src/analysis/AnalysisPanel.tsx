@@ -29,7 +29,8 @@ interface Props {
   customSeconds: number
   showOwnership: boolean
   autoAnalyze: boolean
-  paused?: boolean // Erase is on: no analysis until it is turned off
+  paused?: boolean // Erase is on (or a bonus game is over): no analysis
+  pausedNote?: string | null // shown while paused; null: none
   pvSel: PvSelection | null
   connection: string
   onPreset: (id: string) => void
@@ -119,7 +120,9 @@ export function AnalysisPanel(p: Props) {
         </div>
       </div>
 
-      {p.paused ? <p class="note">Analysis paused while erasing stones.</p> : null}
+      {p.paused && p.pausedNote !== null ? (
+        <p class="note">{p.pausedNote ?? 'Analysis paused while erasing stones.'}</p>
+      ) : null}
       {p.connection !== 'open' ? (
         <p class="note warn">
           {p.connection === 'unauthorized'

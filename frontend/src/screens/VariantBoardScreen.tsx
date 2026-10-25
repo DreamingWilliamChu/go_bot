@@ -8,12 +8,12 @@ import { BoardView, type CandidateMark } from '../board/BoardView'
 import { MovesToolbar } from '../board/MovesToolbar'
 import { boardWithLine, candidateMarks, lockPrediction, overlayLine } from '../board/overlay'
 import type { AnalysisBundle } from './BoardScreen'
+import { SplitHandle } from './SplitHandle'
 import type { VariantAction } from '../variant/api'
 import { BonusSettings, bonusPrefsValid } from '../variant/BonusSettings'
 import {
   announcementText,
   bonusesLeftText,
-  chanceText,
   lockText,
   provenanceText,
   resultText,
@@ -31,6 +31,8 @@ interface Props {
   onLeave: () => void // Bonus Mode off
   onOpenRecord: (file: File) => void
   toast: (msg: string) => void
+  erasing: boolean // taps take stones off; no analysis until it is turned off
+  setErasing: (on: boolean, resume?: boolean) => void
   // analysis
   analysis: AnalysisBundle
   engine: EngineStatus | null
@@ -101,12 +103,17 @@ export function VariantBoardScreen(p: Props) {
       return
     }
     setPvSel(null)
+    if (p.erasing) {
+      if (s.grid[y * s.size + x]) void act({ type: 'erase', x, y })
+      return
+    }
     void act({ type: 'place', x, y })
   }
 
   function newGame() {
     if (view.actions.length && !over && !confirm('Start a new bonus game? This one is replaced.')) return
     setSettingsOpen(false)
+    p.setErasing(false, false) // the new game is analysed anyway
     p.onNewGame()
   }
 
@@ -140,23 +147,18 @@ export function VariantBoardScreen(p: Props) {
             candidates={marks}
             pv={drawn.pv}
             onPoint={onPoint}
-            ariaLabel={`Bonus Go board, ${colorName(s.toMove)} to play`}
+            ariaLabel={p.erasing ? 'Bonus Go board, tap a stone to erase it' : `Bonus Go board, ${colorName(s.toMove)} to play`}
           />
         </div>
 
         <div class={`bonus-status${s.bonusActive && !over ? ' active' : ''}`} data-testid="bonus-status">
           <div data-testid="bonuses-left">{bonusesLeftText(view)}</div>
-          {!over ? (
-            <div class="muted small" data-testid="bonus-chance">
-              {chanceText(view)}
-            </div>
-          ) : null}
         </div>
 
         <div class="game-line small">
           <span>
             {cfg.size}×{cfg.size} · chinese · komi {cfg.komi} · {cfg.moves_per_bonus} moves per bonus ·{' '}
-            {cfg.trigger === 'judge' ? `bonuses by the judge (modelled over H ${cfg.horizon})` : `random bonuses, H ${cfg.horizon}`}
+            {cfg.trigger === 'judge' ? 'bonuses by the judge' : `random bonuses, H ${cfg.horizon}`}
           </span>
           <span>
             Move {s.placements} · captures B {s.captures.B} / W {s.captures.W}
@@ -170,6 +172,7 @@ export function VariantBoardScreen(p: Props) {
           onUndo={() => void act({ type: 'undo' })}
           onPass={() => (over ? p.toast('The game is over.') : void act({ type: 'pass' }))}
           onRedo={() => void act({ type: 'redo' })}
+          erase={{ on: p.erasing, onClick: () => p.setErasing(!p.erasing) }}
           keep={{
             color: s.toMove,
             on: lock.on,
@@ -220,7 +223,10 @@ export function VariantBoardScreen(p: Props) {
             hidden
             onChange={(e) => {
               const f = (e.target as HTMLInputElement).files?.[0]
-              if (f) p.onOpenRecord(f)
+              if (f) {
+                p.setErasing(false, false)
+                p.onOpenRecord(f)
+              }
               ;(e.target as HTMLInputElement).value = ''
             }}
           />
@@ -258,6 +264,8 @@ export function VariantBoardScreen(p: Props) {
         ) : null}
       </div>
 
+      <SplitHandle name="board" />
+
       <div class="side-col">
         <AnalysisPanel
           bonus
@@ -292,7 +300,8 @@ export function VariantBoardScreen(p: Props) {
           customSeconds={p.customSeconds}
           showOwnership={false}
           autoAnalyze={p.autoAnalyze}
-          paused={over}
+          paused={over || p.erasing}
+          pausedNote={p.erasing ? undefined : null}
           pvSel={result ? pvSel : null}
           connection={p.analysis.connection}
           onPreset={p.onPreset}

@@ -7,8 +7,8 @@ Format ``gobot.bonus-go.game`` version 1::
       "id": "...", "created": 1730000000.0, "provenance": "new" | "photo" | "branch" | "import",
       "config": {...VariantConfig...},
       "initial": {...public initial state...},
-      "actions": [[x, y] | "pass", ...], "redo": [...], "revision": 12,
-      "events": [...turn_start / move / game_end events, as resolved...],
+      "actions": [[x, y] | "pass" | "bonus" | {"erase": [x, y]}, ...], "redo": [...], "revision": 12,
+      "events": [...turn_start / move / bonus_granted / erase / game_end events, as resolved...],
       "commitment": "<sha256 of schedule + salt>",
       "private": {"seed": ..., "salt": "...", "schedule": {"B": [...], "W": [...]}}   # server files only
       "reveal":  {"salt": "...", "schedule": {...}}                                    # exports, game over
@@ -36,11 +36,14 @@ class RecordError(ValueError):
     """A game record that cannot be loaded (wrong format/version, or it does not replay)."""
 
 
-def encode_action(action: int, size: int) -> list[int] | str:
+def encode_action(action: int, size: int) -> list[int] | str | dict[str, list[int]]:
     if action == size * size:
         return "pass"
     if action == size * size + 1:
         return "bonus"  # judge trigger: the judge granted a bonus on this turn
+    if action >= size * size + 2:
+        point = action - (size * size + 2)
+        return {"erase": [point % size, point // size]}  # a stone taken off (not a move)
     return [action % size, action // size]
 
 
@@ -49,10 +52,12 @@ def decode_action(a: Any, size: int) -> int:
         return size * size
     if a == "bonus":
         return size * size + 1
-    if isinstance(a, list) and len(a) == 2 and all(isinstance(v, int) for v in a):
-        x, y = a
+    erase = isinstance(a, dict) and set(a) == {"erase"}
+    p = a["erase"] if erase else a
+    if isinstance(p, list) and len(p) == 2 and all(isinstance(v, int) for v in p):
+        x, y = p
         if 0 <= x < size and 0 <= y < size:
-            return y * size + x
+            return size * size + 2 + y * size + x if erase else y * size + x
     raise RecordError(f"bad action {a!r}")
 
 

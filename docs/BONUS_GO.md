@@ -115,6 +115,14 @@ explicit event in the game record, and replaying a record checks those events ag
 however, let a player see a turn start that was already announced (for example that the opponent's next turn is a
 bonus) and then change their own move. This is an analysis tool, not a tournament server.
 
+### Erase
+
+Erase takes a stone off the board, for example dead stones before the final passes (the game is scored as the board
+stands). It is an edit, not a move: whose turn it is, the moves left in a bonus turn, the bonuses and the pass-only
+streak stay as they are, and the position after it joins the superko history. It is an entry in the history like a
+move (Undo takes it back, Redo replays it), and the game record stores it as an action (`{"erase": [x, y]}`) with an
+`erase` event. The analysis looks at the board as it stands.
+
 At creation the Mac publishes a SHA-256 commitment to the schedule (plus a random salt). When the game ends the
 schedule and salt are revealed, so the commitment can be checked.
 

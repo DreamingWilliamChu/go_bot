@@ -39,8 +39,8 @@ or salt.
 ## Why the game lives on the server
 
 The standard game stays in the browser exactly as before (`frontend/src/game/game.ts`). A bonus game is created
-and stored on the Mac: the browser sends *actions* (place, pass, undo, redo) with the revision it last saw, and the
-server decides whose turn it is. So:
+and stored on the Mac: the browser sends *actions* (place, pass, bonus, erase, undo, redo) with the revision it last
+saw, and the server decides whose turn it is. So:
 
 - the hidden schedule never reaches the browser;
 - a click cannot grant moves (the API has no colour field);

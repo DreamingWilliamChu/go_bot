@@ -12,6 +12,7 @@ export type VariantAction =
   | { type: 'place'; x: number; y: number }
   | { type: 'pass' }
   | { type: 'bonus' } // judge trigger: the judge grants a bonus on this turn
+  | { type: 'erase'; x: number; y: number } // a stone taken off: an edit, not a move
   | { type: 'undo' }
   | { type: 'redo' }
 

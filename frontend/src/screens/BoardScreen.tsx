@@ -28,6 +28,7 @@ import {
 } from '../game/game'
 import type { KeepRound, Point } from '../game/keepRound'
 import { exportSgf, importSgf } from '../game/sgf'
+import { SplitHandle } from './SplitHandle'
 import { stdKey } from '../analysis/useAnalysis'
 
 type Palette = 'B' | 'W' | 'erase' | 'cycle'
@@ -259,6 +260,7 @@ export function BoardScreen(p: Props) {
                 setGame(pass(game, toMove))
               }}
               onRedo={() => onHistory(redo(game))}
+              erase={{ on: p.erasing, onClick: () => p.setErasing(!p.erasing) }}
               keep={{
                 color: keepColor ?? toMove,
                 on: keepColor !== null,
@@ -274,15 +276,6 @@ export function BoardScreen(p: Props) {
             <div class="toolbar">
               <button class="btn" onClick={enterSetup} data-testid="edit-position">
                 Edit position
-              </button>
-              <button
-                class={p.erasing ? 'btn erase on' : 'btn erase'}
-                onClick={() => p.setErasing(!p.erasing)}
-                aria-pressed={p.erasing}
-                title={p.erasing ? 'Stop erasing and analyse again' : 'Tap stones to take them off the board'}
-                data-testid="erase"
-              >
-                {p.erasing ? 'Erasing' : 'Erase'}
               </button>
               <button class="btn" onClick={onNewGame} data-testid="new-game">
                 New game
@@ -379,6 +372,8 @@ export function BoardScreen(p: Props) {
           </div>
         ) : null}
       </div>
+
+      <SplitHandle name="board" />
 
       <div class="side-col">
         {mode === 'play' ? (

@@ -81,5 +81,15 @@ class VariantConfig(BaseModel):
         player's move: the search never chooses it, and it is outside the network's policy."""
         return self.size * self.size + 1
 
+    def erase_action(self, point: int) -> int:
+        """Taking the stone on ``point`` (``y * N + x``) off the board: an edit, not a move. Like the
+        judge's grant it is outside the network's policy, and the search never chooses it."""
+        return self.size * self.size + 2 + point
+
+    def erased_point(self, action: int) -> int | None:
+        """The point an erase action takes a stone off, or None for any other action."""
+        point = action - (self.size * self.size + 2)
+        return point if 0 <= point < self.area else None
+
     def public(self) -> dict[str, object]:
         return self.model_dump()

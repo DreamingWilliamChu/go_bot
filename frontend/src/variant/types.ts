@@ -66,6 +66,7 @@ export type VariantEvent =
   | { type: 'turn_start'; player: Color; turnIndex: number; bonus: boolean; moves: number; probability: number }
   | { type: 'move'; player: Color; x?: number; y?: number; pass?: true; captured?: number; turnEnded: boolean }
   | { type: 'bonus_granted'; player: Color; turnIndex: number; moves: number }
+  | { type: 'erase'; x: number; y: number; color: Color } // not a move: the turn is unchanged
   | ({ type: 'game_end' } & GameResult)
 
 export interface VariantView {
@@ -76,7 +77,7 @@ export interface VariantView {
   state: VariantState
   events: VariantEvent[]
   newEvents: VariantEvent[]
-  actions: ([number, number] | 'pass')[]
+  actions: ([number, number] | 'pass' | 'bonus' | { erase: [number, number] })[]
   canUndo: boolean
   canRedo: boolean
   reveal: { salt: string; schedule: PerColor<number[]> } | null

@@ -1,7 +1,7 @@
 """REST endpoints for bonus-turn Go games (docs/BONUS_GO.md).
 
-The server owns each game and its hidden schedule. A client sends *actions* (place, pass, undo, redo)
-with the revision it last saw; the server decides who moves, so no click can grant moves, and a stale
+The server owns each game and its hidden schedule. A client sends *actions* (place, pass, bonus, erase,
+undo, redo) with the revision it last saw; the server decides who moves, so no click can grant moves, and a stale
 revision is answered with 409 and the current game.
 """
 
@@ -54,7 +54,7 @@ class CreateRequest(BaseModel):
 
 
 class Action(BaseModel):
-    type: Literal["place", "pass", "bonus", "undo", "redo"]
+    type: Literal["place", "pass", "bonus", "erase", "undo", "redo"]
     x: int | None = None
     y: int | None = None
 
@@ -159,8 +159,11 @@ def build_router(settings: Settings) -> tuple[APIRouter, GameStore]:
                     action = cfg.bonus_action
                 else:
                     if a.x is None or a.y is None or not (0 <= a.x < cfg.size and 0 <= a.y < cfg.size):
-                        raise HTTPException(400, "A placement needs a point on the board.")
+                        what = "A placement" if a.type == "place" else "An erase"
+                        raise HTTPException(400, f"{what} needs a point on the board.")
                     action = a.y * cfg.size + a.x
+                    if a.type == "erase":
+                        action = cfg.erase_action(action)
                 events = game.play(action)
         except IllegalMove as e:
             raise HTTPException(400, {"message": str(e), "reason": e.reason}) from e
