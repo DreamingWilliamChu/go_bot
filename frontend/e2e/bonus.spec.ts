@@ -164,7 +164,7 @@ test('judge: Keep color grants a bonus before the first move; analysis never sug
   const keep = page.getByTestId('keep-color')
   // nothing happens by itself: the turn starts normal and the judge may grant a bonus
   await expect(page.getByTestId('bonus-turn')).toContainText('Black to play — normal turn (1 move)')
-  await expect(keep).toHaveText('Judge: grant bonus · 2 left')
+  await expect(keep).toHaveText('Grant bonus')
   // to the players and the analysis the judge's timing is random: a modelled chance is shown
   await expect(page.getByTestId('bonus-chance')).toContainText('The judge decides; modelled next-turn chance — Black 2/19')
   // and the bonus search never lists a bonus among its moves
@@ -186,12 +186,33 @@ test('judge: Keep color grants a bonus before the first move; analysis never sug
   await tapPoint(page, 9, 3, 2)
   await tapPoint(page, 9, 4, 2)
   await expect(page.getByTestId('bonus-turn')).toContainText('White to play — normal turn (1 move)')
-  await expect(keep).toHaveText('Judge: grant bonus · 1 left')
+  await expect(keep).toHaveText('Grant bonus')
   await tapPoint(page, 9, 6, 6) // no bonus for White this time
-  await expect(keep).toHaveText('Judge: grant bonus · 1 left')
-  // undo restores the granted bonus exactly
-  for (let i = 0; i < 5; i++) await page.getByRole('button', { name: 'Undo' }).click()
+  await expect(keep).toHaveText('Grant bonus')
+  // the grant is an ordinary entry in the history: undo and redo step through it like moves
+  const undo = page.getByRole('button', { name: 'Undo' })
+  const redo = page.getByRole('button', { name: 'Redo' })
+  const stones = page.locator('svg.board').first().locator('circle.stone-b, circle.stone-w')
+  for (let i = 0; i < 4; i++) await undo.click() // White's move, then Black's three bonus moves
+  await expect(stones).toHaveCount(0)
+  await expect(page.getByTestId('bonus-announcement')).toHaveText('Bonus! Black plays 3 moves in a row this turn.')
+  await expect(page.getByTestId('bonuses-left')).toHaveText('Bonuses left — Black: 1 · White: 1')
+  await undo.click() // the grant itself
+  await expect(page.getByTestId('bonus-turn')).toContainText('Black to play — normal turn (1 move)')
   await expect(page.getByTestId('bonuses-left')).toHaveText('Bonuses left — Black: 2 · White: 1')
-  await expect(keep).toHaveText('Judge: grant bonus · 2 left')
+  await expect(keep).toHaveText('Grant bonus')
+  await redo.click() // the grant comes back...
+  await expect(page.getByTestId('bonus-announcement')).toHaveText('Bonus! Black plays 3 moves in a row this turn.')
+  await expect(page.getByTestId('bonuses-left')).toHaveText('Bonuses left — Black: 1 · White: 1')
+  for (let i = 0; i < 4; i++) await redo.click() // ...and so do the moves after it
+  await expect(stones).toHaveCount(4)
+  await expect(page.getByTestId('bonus-turn')).toContainText('Black to play — normal turn (1 move)')
+  await expect(redo).toBeDisabled()
+  // as with ordinary moves, a new entry after undo clears the redo list
+  await undo.click()
+  await expect(redo).toBeEnabled()
+  await keep.click() // the judge grants White's bonus instead of the move that was undone
+  await expect(redo).toBeDisabled()
+  await expect(page.getByTestId('bonuses-left')).toHaveText('Bonuses left — Black: 1 · White: 0')
   await noHorizontalOverflow(page)
 })

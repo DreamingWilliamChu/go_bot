@@ -10,7 +10,7 @@ be played.
 | | Bonus Mode **off** (standard Go) | Bonus Mode **on** (this variant) |
 |---|---|---|
 | Who moves | Players alternate | Players alternate turns; a bonus turn has several moves |
-| Keep color | A manual lock: tap it and the shown colour plays every move until you tap it again. No move limit | **Judge decides** (default): before the first move of a turn it reads "Judge: grant bonus · n left"; the judge taps it to grant the player a bonus, and Keep color locks the player for the bonus moves. **Random**: a read-only indicator that turns on by itself for a bonus turn the Mac scheduled. Either way it turns off by itself when the turn's moves are used up, and it can never add or extend a bonus mid-turn |
+| Keep color | A manual lock: tap it and the shown colour plays every move until you tap it again. No move limit | **Judge decides** (default): before the first move of a turn it reads "Grant bonus"; the judge taps it to grant the player a bonus, and Keep color locks the player for the bonus moves. **Random**: a read-only indicator that turns on by itself for a bonus turn the Mac scheduled. Either way it turns off by itself when the turn's moves are used up, and it can never add or extend a bonus mid-turn |
 | Game state | In the browser (as before) | On the Mac, which holds the hidden bonus schedule |
 
 Bonus Mode is never switched on or off silently in the middle of a game. Turning it on asks whether to start a new
@@ -123,8 +123,8 @@ schedule and salt are revealed, so the commitment can be checked.
 - Each player has an allocation of bonuses (0–50; default 3 each). Remaining counts are public.
 - **An outside judge decides when they happen**, not the players and not the program. At the start of a player's
   personal turn, before the turn's first move, the judge may grant that player one of their remaining bonuses: the
-  turn becomes a bonus turn of `moves_per_bonus` moves in total. In the app the judge taps Keep color ("Judge:
-  grant bonus · n left").
+  turn becomes a bonus turn of `moves_per_bonus` moves in total. In the app the judge taps Keep color ("Grant
+  bonus").
 - A bonus can be granted only to the player to move, only before that turn's first move, and only with one left.
   It can never be granted mid-turn, added to a bonus turn, or extended. A bonus granted and then followed at once by
   a pass makes a pass-only turn (the bonus is spent). There is no deadline: unused bonuses lapse at game end.
@@ -141,7 +141,9 @@ schedule and salt are revealed, so the commitment can be checked.
   judge may behave differently, so win estimates in judge games are approximations of that model.
 - The current turn is analysed as it stands: a normal turn until the judge grants a bonus (analyse again after a
   grant).
-- Undo/redo restores the bonus counts exactly. The game record stores the grant as an action (`"bonus"`) and a
+- A grant is an entry in the move history like any move: Undo takes back the last entry, whether a move or a
+  grant (an undone grant gives the bonus back and the turn is normal again), Redo replays it, and a new move or
+  grant after an undo clears the redo list. The game record stores the grant as an action (`"bonus"`) and a
   `bonus_granted` event. The Mac draws no schedule for judge games.
 - The trained network was trained on the Mac's random schedule; in judge games its results are labelled
   approximate.

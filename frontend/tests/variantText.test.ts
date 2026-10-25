@@ -76,7 +76,7 @@ describe('bonuses granted by a judge', () => {
 
   it('turns Keep color into the judge\u2019s Grant bonus control before the first move', () => {
     const lock = lockText(judge({ canGrantBonus: true, remaining: { B: 2, W: 0 } }))
-    expect(lock).toMatchObject({ canUse: true, on: false, label: 'Judge: grant bonus · 2 left' })
+    expect(lock).toMatchObject({ canUse: true, on: false, label: 'Grant bonus' })
   })
 
   it('shows the modelled chance, even when the judge is late (more bonuses than turns before H)', () => {

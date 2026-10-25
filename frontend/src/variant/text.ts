@@ -59,7 +59,7 @@ export function lockText(v: VariantView): { on: boolean; label: string; title: s
     return {
       on: false,
       canUse: true,
-      label: `Judge: grant bonus · ${left} left`,
+      label: 'Grant bonus',
       title: `For the judge only: grant ${who} one of ${left} bonus${left === 1 ? '' : 'es'}. ${who} then plays ${s.config.moves_per_bonus} moves in a row this turn, and Keep color stays locked until they are used.`,
     }
   }
