@@ -262,7 +262,20 @@ class Pipeline:
             assert self.pool is not None
             outs = self.pool.play(best_path, p.selfplay, jobs)
             self.check_stop()
-            chunk = outcomes_to_chunk(outs, si, g)
+            meta = {
+                "run": self.dir.name,
+                "preset": p.name,
+                "model": best,
+                "stage": stage.name,
+                "generation": g,
+                "rules": {
+                    "size": p.size,
+                    "komi": p.selfplay.komi,
+                    "moves_per_bonus": p.selfplay.moves_per_bonus,
+                },
+                "visits": [p.selfplay.visits, p.selfplay.fast_visits, p.selfplay.full_prob],
+            }
+            chunk = outcomes_to_chunk(outs, si, g, meta)
             if chunk is None:
                 raise RuntimeError("self-play produced no samples")
             self.replay.add(chunk, f"gen_{g:03d}")

@@ -46,10 +46,14 @@ def make_chunk(
     kind: int,
     stage: int,
     generation: int,
+    meta: dict[str, Any] | None = None,
 ) -> dict[str, np.ndarray]:
+    """``meta``: experiment identifiers (run, model that played, preset, stage, rules) stored with the
+    chunk; not a model input."""
     raw = Raw.concat(raws)
     n = len(raw)
     return {
+        "meta": np.asarray(json.dumps(meta or {}, sort_keys=True)),
         **{f: getattr(raw, f) for f in FIELDS},
         "policy": np.stack(policies).astype(np.float16),
         "value": np.asarray(values, dtype=np.float32),

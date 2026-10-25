@@ -26,21 +26,26 @@ export function signMapOf(b: GoBoard): Sign[][] {
   return b.signMap.map((row) => row.map((v) => (v > 0 ? 1 : v < 0 ? -1 : 0)) as Sign[])
 }
 
-/** Predictions for the `movesLeft` moves of `color`: ones kept from before (unless filled since),
- *  else the best line of the latest analysis. */
+/** Predictions for the `movesLeft` moves of the locked colour: ones kept from before (unless filled
+ *  since), else the best line of the latest analysis, up to the first pass or the first move of
+ *  another colour (a line may end the turn early). */
 export function lockPrediction(
   board: GoBoard,
   result: AnalysisResult | null,
   frozen: Point[] | null,
   movesLeft: number,
+  color?: 'B' | 'W',
 ): Point[] | null {
   const kept = frozen?.filter((q) => board.get([q.x, q.y]) === 0)
   if (kept?.length) return kept
   const top = result?.candidates[0]
   if (!top) return null
-  return top.pv
-    .slice(0, movesLeft)
-    .flatMap((s) => (s.pass || s.x === null || s.y === null ? [] : [{ x: s.x, y: s.y }]))
+  const out: Point[] = []
+  for (const s of top.pv.slice(0, movesLeft)) {
+    if (s.pass || s.x === null || s.y === null || (color && s.color !== color)) break
+    out.push({ x: s.x, y: s.y })
+  }
+  return out.length ? out : null
 }
 
 export function overlayLine(

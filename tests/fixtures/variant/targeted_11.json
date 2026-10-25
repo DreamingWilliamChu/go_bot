@@ -1,0 +1,171 @@
+{
+ "from": "tests/fixtures/variant/targeted.json",
+ "positions": [
+  {
+   "category": "no_bonus",
+   "rows": [
+    "X.X.OXXXXXX",
+    "OOOXOXXX.XX",
+    "O.OOOXXXXXX",
+    "XXXXOXXXXXX",
+    "X.OXXXXX.XX",
+    "OOOOOXXXXXX",
+    "OOOOOOOOOOO",
+    "OOOOOOOOOOO",
+    "OO.OOOOO.OO",
+    "OOOOOOOOOOO",
+    "OOOOOOOOOOO"
+   ],
+   "toMove": 1,
+   "komi": -26.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    3
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    23,
+    45
+   ],
+   "value": 1.0,
+   "legal": 7,
+   "embedded_from": [
+    "X.X.O",
+    "OOOXO",
+    "O.OOO",
+    "XXXXO",
+    "X.OXX"
+   ]
+  },
+  {
+   "category": "no_bonus",
+   "rows": [
+    "OO.XXXXXXXX",
+    "O.OOXXXX.XX",
+    "XXXX.XXXXXX",
+    "OOXO.XXXXXX",
+    ".OOXXXXX.XX",
+    "OOOOOXXXXXX",
+    "OOOOOOOOOOO",
+    "OOOOOOOOOOO",
+    "OO.OOOOO.OO",
+    "OOOOOOOOOOO",
+    "OOOOOOOOOOO"
+   ],
+   "toMove": 2,
+   "komi": -23.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    3,
+    2
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    37
+   ],
+   "value": 0.0,
+   "legal": 8,
+   "embedded_from": [
+    "OO.XX",
+    "O.OOX",
+    "XXXX.",
+    "OOXO.",
+    ".OOXX"
+   ]
+  },
+  {
+   "category": "no_bonus",
+   "rows": [
+    "XXX.XXXXXXX",
+    "XOXOXXXX.XX",
+    "OOOXXXXXXXX",
+    "...OXXXXXXX",
+    "XXXO.XXX.XX",
+    "OOOOOXXXXXX",
+    "OOOOOOOOOOO",
+    "OOOOOOOOOOO",
+    "OO.OOOOO.OO",
+    "OOOOOOOOOOO",
+    "OOOOOOOOOOO"
+   ],
+   "toMove": 1,
+   "komi": -20.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    3
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    3
+   ],
+   "value": 1.0,
+   "legal": 8,
+   "embedded_from": [
+    "XXX.X",
+    "XOXOX",
+    "OOOXX",
+    "...OX",
+    "XXXO."
+   ]
+  },
+  {
+   "category": "no_bonus",
+   "rows": [
+    "XOXOOXXXXXX",
+    "XOX..XXX.XX",
+    "X.OX.XXXXXX",
+    ".XOX.XXXXXX",
+    "XXOOOXXX.XX",
+    "OOOOOXXXXXX",
+    "OOOOOOOOOOO",
+    "OOOOOOOOOOO",
+    "OO.OOOOO.OO",
+    "OOOOOOOOOOO",
+    "OOOOOOOOOOO"
+   ],
+   "toMove": 1,
+   "komi": -21.5,
+   "remaining": [
+    0,
+    0
+   ],
+   "turnsStarted": [
+    2,
+    3
+   ],
+   "horizon": 4,
+   "cap": 3,
+   "k": 3,
+   "best": [
+    14,
+    23
+   ],
+   "value": 1.0,
+   "legal": 9,
+   "embedded_from": [
+    "XOXOO",
+    "XOX..",
+    "X.OX.",
+    ".XOX.",
+    "XXOOO"
+   ]
+  }
+ ]
+}

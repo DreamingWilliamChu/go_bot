@@ -27,6 +27,18 @@ jobs:
       # Engine and moku tests skip themselves when KataGo / weights are absent; see the jobs below.
       - run: uv run pytest -q
 
+  variant-training:
+    name: Bonus-turn network training (CPU smoke run)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      # torch comes from the CPU-only index on Linux (pyproject [tool.uv.sources])
+      - run: uv sync --frozen --group train
+      - run: uv run pytest -q tests/variant
+      - run: GOBOT_VARIANT_DIR=$RUNNER_TEMP/variant uv run gobot variant pipeline run --preset smoke_cpu --no-katago --run ci
+      - run: cat $RUNNER_TEMP/variant/runs/ci/eval/report.md >> "$GITHUB_STEP_SUMMARY"
+
   frontend:
     name: Frontend typecheck, unit tests, build
     runs-on: ubuntu-24.04

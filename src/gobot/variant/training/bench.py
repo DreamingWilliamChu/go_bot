@@ -135,8 +135,13 @@ def run(preset: Preset, out: Path | None = None) -> dict[str, Any]:
             / max(1, s.visits * s.full_prob + s.fast_visits * (1 - s.full_prob))
         ),
     }
-    est["total_s_per_generation"] = sum(est.values())
+    est["total_s_per_generation"] = sum(v for v in est.values() if isinstance(v, (int, float)))
     est["generations_in_budget"] = int(preset.max_runtime_s * 0.75 // max(1, est["total_s_per_generation"]))
+    est["note"] = (
+        "Game length is measured with an untrained network, which passes early; trained networks play "
+        f"longer games (about {res['one_process']['moves_per_game']:.0f} moves here), so scale self-play time "
+        "by the real game length (the pipeline logs it per generation)."
+    )
     res["estimate"] = est
     if out is not None:
         out.parent.mkdir(parents=True, exist_ok=True)

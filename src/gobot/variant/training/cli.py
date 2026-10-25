@@ -33,9 +33,11 @@ def add_parser(sub: Any) -> None:
     e.add_argument("--visits", type=int, default=64)
     e.add_argument("--size", type=int, default=11)
     e.add_argument("--workers", type=int, default=8)
-    t = vs.add_parser("targeted", help="build the 11x11 targeted suite from the 5x5 one")
+    t = vs.add_parser("targeted", help="build the 11x11 targeted suite, or score a network on it")
     t.add_argument("--src", default="tests/fixtures/variant/targeted.json")
     t.add_argument("--size", type=int, default=11)
+    t.add_argument("--eval", default=None, metavar="MODEL", help="score this model.onnx on the 11x11 suite")
+    t.add_argument("--visits", type=int, default=192)
     vs.add_parser("models", help="list installed variant networks")
 
 
@@ -106,7 +108,12 @@ def run_cli(args: argparse.Namespace, settings: Settings) -> int:
         print(json.dumps(match.public(), indent=2))
         return 0
     if args.vcmd == "targeted":
-        from gobot.variant.training.targeted import embedded_suite, embedded_suite_path
+        from gobot.variant.training.targeted import embedded_suite, embedded_suite_path, run_targeted
+
+        if args.eval:
+            report = run_targeted(embedded_suite_path(settings.root, args.size), args.eval, args.visits)
+            print(json.dumps(report, indent=2))
+            return 0
 
         src = json.loads(Path(args.src).read_text())
         kept = embedded_suite(src["positions"], args.size)

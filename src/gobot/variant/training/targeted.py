@@ -110,7 +110,11 @@ def _mover_value(rec: dict[str, Any]) -> float:
     return float(rec["value"] if rec["toMove"] == BLACK else 1 - rec["value"])
 
 
-def generate(per_category: int = 6, seed: int = 20261025, budget_s: float = 600.0) -> list[dict[str, Any]]:
+def generate(
+    per_category: int = 6, seed: int = 20261025, budget_s: float = 600.0, frame: int = 0
+) -> list[dict[str, Any]]:
+    """Positions on 5x5 boards, or (``frame`` = 11) 5x5 corners inside the settled 11x11 frame of
+    ``embed_rows``, solved exactly on the full board."""
     rng = random.Random(seed)
     found: dict[str, list[dict[str, Any]]] = {c: [] for c in CATEGORIES}
     t0 = time.monotonic()
@@ -118,9 +122,14 @@ def generate(per_category: int = 6, seed: int = 20261025, budget_s: float = 600.
         b = _random_board(rng, 5, rng.randint(4, 7))
         if b is None:
             continue
+        komi = rng.choice((0.5, 1.5, 2.5, 3.5, -0.5, -1.5, -2.5))
+        if frame:
+            b = Board.from_rows(embed_rows(b.rows(), frame))
+            if b.dead_chains():
+                continue
+            komi += _outside_lead(frame)
         mover = rng.choice((BLACK, WHITE))
         oi = 2 - mover  # index of the opponent
-        komi = rng.choice((0.5, 1.5, 2.5, 3.5, -0.5, -1.5, -2.5))
         started = [2, 2]
         started[oi] = 3  # the opponent has one eligible turn left (H = 4)
         try:
@@ -202,17 +211,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--per-category", type=int, default=6)
     p.add_argument("--seed", type=int, default=20261025)
     p.add_argument("--budget", type=float, default=600.0)
+    p.add_argument("--frame", type=int, default=0, help="11: corner positions inside a settled 11x11 board")
     a = p.parse_args(argv)
     sys.setrecursionlimit(20000)
-    recs = handmade() + generate(a.per_category, a.seed, a.budget)
+    recs = (handmade() if not a.frame else []) + generate(a.per_category, a.seed, a.budget, a.frame)
     Path(a.out).write_text(json.dumps({"seed": a.seed, "positions": recs}, indent=1) + "\n")
     counts = {c: sum(1 for r in recs if r["category"] == c) for c in CATEGORIES}
     print(f"wrote {len(recs)} positions to {a.out}: {counts}")
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
 
 
 # ---------------------------------------------------------------------- 11x11 versions for trained networks
@@ -309,3 +315,7 @@ def run_targeted(path: Path, model_path: str, visits: int) -> dict[str, Any]:
 
         report[name] = check_agent(positions, choose)
     return report
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -23,6 +23,10 @@ Photograph a physical Go board with your iPhone, or choose a photo. Your Mac rec
   - Localhost-only by default. `--lan` lets your phone connect after scanning a pairing QR code.
   - Optional `--https`, with a private certificate authority, for the live camera preview.
 - **Remote access with sign-in:** `--tunnel` makes the app reachable from anywhere through a Cloudflare Tunnel.
+- **Keep color and Bonus Mode (bonus-turn Go):**
+  - *Keep color* is a manual lock: the chosen colour plays every move until you tap it again.
+  - *Bonus Mode* plays a variant in which each player gets a few hidden, randomly timed bonus turns of several moves in a row ([rules](docs/BONUS_GO.md)). The Mac keeps the hidden schedule. The board announces each bonus before the move, locks the player for the bonus moves, then switches. It shows the bonuses left and the public chance of the next one.
+  - Bonus positions can be analysed with standard KataGo (which ignores future bonuses), with a bonus-aware search using KataGo's network as an approximate evaluator, or with a small network trained by bonus self-play ([training](docs/VARIANT_TRAINING.md), [design](docs/VARIANT_ARCHITECTURE.md)).
   - Every device except the Mac signs in with a username and password, which you set and change under *Engine → Account*.
 
 | Check the photo, correct the stones | Analysis (desktop) | Analysis (iPhone size) |
@@ -114,6 +118,8 @@ One photo cannot show which moves led to the position or whether a ko is current
 | `./scripts/update.sh` | Pull and refresh |
 | `uv run gobot models list` | Show installed networks |
 | `./scripts/fetch_test_data.sh && uv run gobot eval` | Recognition accuracy on the public test sets (and your saved test cases) |
+| `uv sync --group train && uv run gobot variant pipeline run --preset local_small` | Train the bonus-turn network (about an hour on an M3 Pro; see docs/VARIANT_TRAINING.md) |
+| `uv run gobot variant bench \| evaluate \| models` | Measure training speed, play paired matches, list installed variant networks |
 
 ## What was verified
 

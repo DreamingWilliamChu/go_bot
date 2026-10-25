@@ -87,6 +87,8 @@ export function SettingsScreen({ status, auth, refreshStatus, toast }: Props) {
         </p>
       </section>
 
+      <BonusNetworks />
+
       <section class="panel">
         <h2>Connect your phone</h2>
         {auth?.mac ? (
@@ -318,6 +320,69 @@ function AccountSection({ auth, toast }: { auth: AuthInfo; toast: (m: string) =>
           </button>
         </div>
       ) : null}
+    </section>
+  )
+}
+
+interface BonusModel {
+  id: string
+  label: string
+  sizes: number[]
+  featureVersion: number | null
+  architecture: { blocks: number; channels: number; parameters: number } | null
+  provenance: { init?: string; selfplay_generations?: number; games?: number; train_step?: number; stage?: string } | null
+  evaluation: { opponent: string; games: number; score: number | null; ci95: [number, number] | null }[] | null
+  created: number | null
+}
+
+/** Networks trained for bonus-turn Go (data/variant/models): what they are and how they were made. */
+function BonusNetworks() {
+  const [models, setModels] = useState<BonusModel[] | null>(null)
+  useEffect(() => {
+    api
+      .get<{ models: BonusModel[] }>('/api/variant/evaluators')
+      .then((r) => setModels(r.models))
+      .catch(() => setModels([]))
+  }, [])
+  return (
+    <section class="panel" data-testid="bonus-networks">
+      <h2>Bonus-variant networks</h2>
+      {models === null ? null : models.length === 0 ? (
+        <p class="small">
+          None installed. Train one with <code>uv run gobot variant pipeline run --preset local_small</code> (see
+          docs/VARIANT_TRAINING.md). Bonus games can still be analysed with KataGo or the bonus search.
+        </p>
+      ) : (
+        <ul class="models">
+          {models.map((m) => (
+            <li key={m.id}>
+              <div>
+                <b>{m.label}</b> <span class="pill">experimental, weak</span>
+                <div class="muted tiny">
+                  {m.sizes.map((n) => `${n}×${n}`).join(', ')} only
+                  {m.architecture ? ` · ${m.architecture.blocks}×${m.architecture.channels} (${m.architecture.parameters.toLocaleString('en-US')} parameters)` : ''}
+                  {m.featureVersion ? ` · inputs v${m.featureVersion}` : ''}
+                </div>
+                {m.provenance ? (
+                  <div class="muted tiny">
+                    {m.provenance.init ?? 'random init'}; then {m.provenance.selfplay_generations ?? 0} generations of
+                    bonus self-play ({(m.provenance.games ?? 0).toLocaleString('en-US')} games, {m.provenance.train_step ?? 0}{' '}
+                    training steps). No KataGo weights are reused.
+                  </div>
+                ) : null}
+                {m.evaluation?.length ? (
+                  <div class="muted tiny">
+                    Evaluation (score with 95% interval):{' '}
+                    {m.evaluation
+                      .map((e) => `vs ${e.opponent} ${e.score !== null ? e.score.toFixed(2) : '–'}${e.ci95 ? ` (${e.ci95[0].toFixed(2)}–${e.ci95[1].toFixed(2)}, ${e.games} games)` : ''}`)
+                      .join('; ')}
+                  </div>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   )
 }

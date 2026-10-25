@@ -24,6 +24,25 @@ describe('board overlay', () => {
     expect(lockPrediction(filled, result, [{ x: 1, y: 1 }, { x: 5, y: 5 }], 2)).toEqual([{ x: 5, y: 5 }])
   })
 
+  it('stops predictions at a pass or at the opponent (the turn ended early)', () => {
+    const b = GoBoard.fromDimensions(9)
+    const early = {
+      candidates: [
+        {
+          ...result.candidates[0],
+          pv: [
+            { gtp: 'C3', x: 2, y: 6, pass: false, color: 'B' },
+            { gtp: 'pass', x: null, y: null, pass: true, color: 'B' },
+            { gtp: 'E3', x: 4, y: 6, pass: false, color: 'W' },
+          ],
+        },
+      ],
+    } as unknown as AnalysisResult
+    expect(lockPrediction(b, early, null, 3, 'B')).toEqual([{ x: 2, y: 6 }])
+    const switched = { candidates: [{ ...result.candidates[0], pv: [{ ...result.candidates[0].pv[0], color: 'W' }] }] } as unknown as AnalysisResult
+    expect(lockPrediction(b, switched, null, 3, 'B')).toBeNull()
+  })
+
   it('draws predictions see-through and numbered from their place in the turn', () => {
     const b = GoBoard.fromDimensions(9)
     const line = overlayLine(null, null, [{ x: 2, y: 6 }, { x: 3, y: 6 }], 'B', 2)

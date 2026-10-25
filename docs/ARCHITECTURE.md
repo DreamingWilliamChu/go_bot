@@ -26,6 +26,7 @@ iPhone Safari / desktop browser                         Mac (Apple Silicon)
 | `engine/config.py`, `engine/service.py`, `engine/models.py` | Per-host config (Metal GPU/ANE, threads, cache), model manifest, verified downloads |
 | `vision/*` | Photo normalisation, grid detection, stone classification, moku fusion (see RECOGNITION.md) |
 | `bench/*`, `eval/*` | Benchmark and recognition evaluation tools |
+| `variant/*`, `web/variant.py` | Bonus-turn Go: rules, hidden schedule, bonus search, variant network and training (see [VARIANT_ARCHITECTURE.md](VARIANT_ARCHITECTURE.md)) |
 
 ### Analysis request lifecycle
 
@@ -63,3 +64,5 @@ Everything internal uses `(x, y)` with `y` counted from the top. That matches SG
 | `data/uploads/` | Normalised photos (pruned after 7 days or 300 files) | no |
 | `data/user_testset/` | Photos you saved as recognition test cases | no |
 | `data/benchmark/`, `data/eval/` | Benchmark and evaluation reports | no |
+| `data/variant/games/` | Bonus games, including their hidden schedules (mode 0600) | no |
+| `data/variant/runs/`, `data/variant/models/` | Training runs (replay, checkpoints, logs, reports) and installed variant networks | no |

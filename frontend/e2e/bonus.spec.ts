@@ -126,3 +126,30 @@ test('analysis branch and photo import require an explicit bonus state', async (
   await expect(page.getByTestId('bonus-provenance')).toContainText('Started from a photo')
   await noHorizontalOverflow(page)
 })
+
+test('bonus analysis: source picker, bonus search labels, KataGo ignores future bonuses', async ({ page }) => {
+  await newBonusGame(page, { size: 9, black: 2, white: 0, horizon: 2 })
+  await page.getByRole('radio', { name: /Quick/ }).click()
+  // the bonus search with the heuristic evaluator (needs no KataGo)
+  await page.getByTestId('source-heuristic').click()
+  await page.getByTestId('analyze').click()
+  await expect(page.getByTestId('analysis-source')).toHaveText('Bonus search', { timeout: 60_000 })
+  await expect(page.getByTestId('analysis-evaluator')).toHaveText('Heuristic evaluator')
+  await expect(page.getByTestId('overview')).toContainText("Black's win estimate (approximate)")
+  await expect(page.getByTestId('candidates')).toBeVisible()
+  // a line keeps Black for the rest of the bonus turn
+  await page.getByRole('button', { name: 'Line' }).first().click()
+  await expect(page.locator('.pvm.B').first()).toBeVisible()
+  await page.getByRole('button', { name: 'Close' }).click()
+  // standard KataGo, labelled as ignoring future bonuses
+  await page.getByTestId('source-katago').click()
+  await page.getByTestId('analyze').click()
+  await expect(page.getByTestId('analysis-source')).toHaveText('Standard KataGo', { timeout: 60_000 })
+  await expect(page.getByTestId('analysis-footnote')).toContainText('ignores future bonuses')
+  await noHorizontalOverflow(page)
+})
+
+test('Engine tab lists bonus-variant networks with their provenance', async ({ page }) => {
+  await page.getByTestId('tab-settings').click()
+  await expect(page.getByTestId('bonus-networks')).toContainText('Bonus-variant networks')
+})

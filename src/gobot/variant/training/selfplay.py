@@ -121,7 +121,7 @@ def allocation_jobs(
 
 
 def outcomes_to_chunk(
-    outcomes: list[GameOutcome], stage: int, generation: int
+    outcomes: list[GameOutcome], stage: int, generation: int, meta: dict[str, Any] | None = None
 ) -> dict[str, np.ndarray] | None:
     raws, pols, vals, scores, actors = [], [], [], [], []
     for o in outcomes:
@@ -135,7 +135,7 @@ def outcomes_to_chunk(
     if not raws:
         return None
     return make_chunk(
-        raws, pols, vals, scores, actors=actors, kind=SELFPLAY, stage=stage, generation=generation
+        raws, pols, vals, scores, actors=actors, kind=SELFPLAY, stage=stage, generation=generation, meta=meta
     )
 
 

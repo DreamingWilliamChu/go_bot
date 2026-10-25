@@ -77,7 +77,7 @@ export function VariantBoardScreen(p: Props) {
   const pvCand = pvSel && result ? result.candidates[pvSel.cand] ?? null : null
   // During a bonus turn: see-through predictions for the moves the locked player still has.
   const prediction = useMemo(
-    () => (s.bonusActive && s.phase === 'in_turn' ? lockPrediction(board, result, null, s.movesLeft) : null),
+    () => (s.bonusActive && s.phase === 'in_turn' ? lockPrediction(board, result, null, s.movesLeft, s.toMove) : null),
     [board, result, s.bonusActive, s.phase, s.movesLeft],
   )
   const line = useMemo(
