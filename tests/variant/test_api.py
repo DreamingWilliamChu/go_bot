@@ -221,3 +221,11 @@ def test_new_games_default_to_player_chosen_bonuses(tmp_settings) -> None:
         v = act(c, v, type="undo")
         v = act(c, v, type="undo")
         assert v["state"]["remaining"] == {"B": 1, "W": 1} and v["state"]["canUseBonus"]
+
+
+def test_default_allocation_is_three_bonuses_each(tmp_settings) -> None:
+    with client(tmp_settings) as c:
+        for cfg in ({"size": 11}, {"size": 9, "trigger": "random"}):
+            v = c.post("/api/variant/games", json={"config": cfg}).json()
+            assert v["state"]["remaining"] == {"B": 3, "W": 3}
+            assert (v["state"]["config"]["black_bonuses"], v["state"]["config"]["white_bonuses"]) == (3, 3)

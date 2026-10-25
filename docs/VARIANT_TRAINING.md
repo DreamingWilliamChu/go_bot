@@ -73,7 +73,7 @@ final: evaluation suite ─▶ report ─▶ install best model for the app
   Colours are never swapped (that would also require swapping komi, bonus resources and outcomes).
 - **Checkpoints** hold the model, optimizer, step and all RNG states; `resume` reproduces an uninterrupted run step
   for step (tested). Ctrl+C stops at the next safe point and saves.
-- **Curriculum** (`presets.py`): ordinary Go (0/0) → small allocation (1/1) → default (2/2) → a mixture of equal and
+- **Curriculum** (`presets.py`): ordinary Go (0/0) → small allocation (1/1) → the default allocation (3/3) → a mixture of equal and
   unequal allocations; each generation also plays a share (20%) of earlier stages' settings. Allocations are stored
   as raw counts.
 - **Promotion rule**: the candidate plays the current best in paired games (same seed, so the same hidden schedule
@@ -109,7 +109,7 @@ Artifacts go to `data/variant/` (git-ignored; `GOBOT_VARIANT_DIR` overrides): `r
 | Self-play workers / parallel games each | 2 / 8 | 8 / 16 | 32 / 64 |
 | Visits: full search / fast search / share of full | 24 / 8 / 50% | 64 / 16 / 25% | 400 / 80 / 25% |
 | Games per generation / at most | 24 / 60 | 640 / 6,000 | 4,000 / 240,000 |
-| Generations (curriculum 0/0 → 1/1 → 2/2 → mixed) | 1 + 1 | 1 + 2 + 2 + 4 | 4 + 6 + 10 + 40 |
+| Generations (curriculum 0/0 → 1/1 → 3/3 → mixed) | 1 + 1 | 1 + 2 + 2 + 4 | 4 + 6 + 10 + 40 |
 | Placement cap per game (truncation) | 3·N² = 147 | 3·N² = 363 | 363 |
 | Replay window | 20k samples / 32 MB | 300k samples / 400 MB | 3M samples / 6 GB |
 | Training batch / optimizer steps per generation (at most) | 64 / 60 | 256 / 1,500 (≈4 uses per sample) | 512 / 20,000 |
@@ -150,6 +150,9 @@ that a resumed run reproduces the losses of an uninterrupted one step for step, 
 that resumes.
 
 ### Local experiment (`local_small`, run `local-1`, best model installed as `local-1-gen_003`)
+
+This run predates two later changes: its "default allocation" stage used 2/2 (the default is now 3 bonuses each;
+3/3 was still part of its mixed stage), and every game used the **random** trigger.
 
 `uv run gobot variant pipeline run --preset local_small --run local-1` on the M3 Pro (8 self-play workers on CPU,
 training on MPS), commit `a485c91`:

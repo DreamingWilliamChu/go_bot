@@ -102,8 +102,8 @@ export const DEFAULT_BONUS_PREFS: BonusPrefs = {
   trigger: 'choice',
   size: 11,
   komi: 7.5,
-  blackBonuses: 2,
-  whiteBonuses: 2,
+  blackBonuses: 3,
+  whiteBonuses: 3,
   movesPerBonus: 3,
   horizon: 0,
 }

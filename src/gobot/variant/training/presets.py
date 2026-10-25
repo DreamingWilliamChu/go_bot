@@ -77,7 +77,7 @@ MIXED = [(0, 0), (1, 1), (2, 2), (3, 3), (2, 1), (1, 2), (3, 1), (1, 3), (2, 0),
 CURRICULUM = [
     Stage("ordinary Go (0/0)", 1, [(0, 0)]),
     Stage("small allocation (1/1)", 2, [(1, 1)]),
-    Stage("default allocation (2/2)", 2, [(2, 2)]),
+    Stage("default allocation (3/3)", 2, [(3, 3)]),
     Stage("mixed equal and unequal", 4, MIXED),
 ]
 
@@ -148,7 +148,7 @@ PRESETS: dict[str, Preset] = {
         stages=[
             Stage("ordinary Go (0/0)", 4, [(0, 0)]),
             Stage("small allocation (1/1)", 6, [(1, 1)]),
-            Stage("default allocation (2/2)", 10, [(2, 2)]),
+            Stage("default allocation (3/3)", 10, [(3, 3)]),
             Stage("mixed equal and unequal", 40, MIXED),
         ],
         games_per_generation=4000,

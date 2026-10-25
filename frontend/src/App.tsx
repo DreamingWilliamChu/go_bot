@@ -26,6 +26,15 @@ function loadSession(): Session {
   return s && s.kind === 'variant' && typeof s.gameId === 'string' ? s : { kind: 'standard' }
 }
 
+// v2 made 3 bonuses each the default. v1 saved the whole settings object, so a stored 2/2 is the old
+// default rather than a choice: carry the other settings over and start on the new default once.
+function loadBonusPrefs(): BonusPrefs {
+  if (loadRaw<BonusPrefs>('gobot.bonusPrefs.v2')) return load('gobot.bonusPrefs.v2', DEFAULT_BONUS_PREFS)
+  const old = load('gobot.bonusPrefs.v1', DEFAULT_BONUS_PREFS)
+  const wasDefault = old.blackBonuses === 2 && old.whiteBonuses === 2
+  return wasDefault ? { ...old, blackBonuses: 3, whiteBonuses: 3 } : old
+}
+
 // A position without history waiting for its bonus state (photo, or a branch of the standard game).
 interface PendingImport {
   setup: Setup
@@ -112,7 +121,7 @@ export function App() {
   const [auth, setAuth] = useState<AuthInfo | null>(null)
   const toastTimer = useRef<number | undefined>(undefined)
   const [session, setSessionState] = useState<Session>(loadSession)
-  const [bonusPrefs, setBonusPrefsState] = useState<BonusPrefs>(() => load('gobot.bonusPrefs.v1', DEFAULT_BONUS_PREFS))
+  const [bonusPrefs, setBonusPrefsState] = useState<BonusPrefs>(loadBonusPrefs)
   const [lastBonusGame, setLastBonusGame] = useState<string | null>(() => loadRaw<{ id: string }>('gobot.bonusLast.v1')?.id ?? null)
   const [entryOpen, setEntryOpen] = useState(false)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
@@ -160,7 +169,7 @@ export function App() {
   }, [])
   const setBonusPrefs = useCallback((p: BonusPrefs) => {
     setBonusPrefsState(p)
-    save('gobot.bonusPrefs.v1', p)
+    save('gobot.bonusPrefs.v2', p)
   }, [])
   const variant = useVariantGame(session.kind === 'variant' ? session.gameId : null, toast, () => {
     setSession({ kind: 'standard' })

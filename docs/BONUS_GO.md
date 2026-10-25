@@ -95,7 +95,7 @@ model the search uses: it samples future bonuses from these observable probabili
 | 13×13 | 45 | About 60 turns per player |
 | 19×19 | 90 | About 120 turns per player |
 
-Defaults: 2 bonuses each, 3 moves per bonus turn. You can change the allocations, moves per bonus and H; the new
+Defaults: 3 bonuses each, 3 moves per bonus turn. You can change the allocations, moves per bonus and H; the new
 values apply to the **next** game (or an explicit restart), never to the counts of a game in progress.
 
 ### Equal allocations are not equal value

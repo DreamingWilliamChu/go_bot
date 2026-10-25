@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from gobot.go.coords import SUPPORTED_SIZES
 from gobot.settings import Settings
-from gobot.variant.config import VariantConfig
+from gobot.variant.config import DEFAULT_BONUSES, VariantConfig
 from gobot.variant.env import VariantGame
 from gobot.variant.rules import COLOR_OF, Board, IllegalMove
 from gobot.variant.serialization import RecordError, encode_action, game_from_export, game_to_json
@@ -25,8 +25,8 @@ from gobot.variant.store import GameNotFound, GameStore
 class ConfigIn(BaseModel):
     size: int = 11
     komi: float = 7.5
-    black_bonuses: int = Field(default=2, ge=0)
-    white_bonuses: int = Field(default=2, ge=0)
+    black_bonuses: int = Field(default=DEFAULT_BONUSES, ge=0)
+    white_bonuses: int = Field(default=DEFAULT_BONUSES, ge=0)
     moves_per_bonus: int = 3
     horizon: int | None = None  # None: default for the board size
     trigger: Literal["choice", "random"] = "choice"  # the app's default: players decide

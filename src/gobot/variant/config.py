@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # Provisional personal-turn horizons H (docs/BONUS_GO.md §4): roughly each player's number of turns in
 # the meaningful part of a game. A game-design setting, not a universal rule.
 DEFAULT_HORIZON = {9: 20, 11: 30, 13: 45, 19: 90}
-DEFAULT_BONUSES = 2
+DEFAULT_BONUSES = 3  # per player
 DEFAULT_MOVES_PER_BONUS = 3
 MAX_SIZE = 25  # GTP letters; the web API restricts sizes further (go.coords.SUPPORTED_SIZES)
 MAX_CHOICE_BONUSES = 50
