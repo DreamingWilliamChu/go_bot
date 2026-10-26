@@ -1,4 +1,4 @@
-"""Command line entry point: ``gobot serve|account|tunnel|models|hardware|bench|eval|certs``."""
+"""Command line entry point: ``gobot serve|account|tunnel|models|hardware|bench|eval|variant|certs``."""
 
 from __future__ import annotations
 
@@ -242,6 +242,10 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--limit", type=int, default=None)
     e.add_argument("--out", default=None)
 
+    from gobot.variant.training.cli import add_parser as add_variant
+
+    add_variant(sub)
+
     c = sub.add_parser("certs", help="create/refresh the local HTTPS certificate authority")
     c.add_argument("--force-ca", action="store_true")
 
@@ -268,6 +272,10 @@ def main(argv: list[str] | None = None) -> int:
         from gobot.eval.recognition import run_cli as eval_cli
 
         return eval_cli(args, settings)
+    if args.cmd == "variant":
+        from gobot.variant.training.cli import run_cli as variant_cli
+
+        return variant_cli(args, settings)
     if args.cmd == "certs":
         from gobot.certs import ensure_certs
         from gobot.netinfo import lan_ip

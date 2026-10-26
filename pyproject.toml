@@ -31,6 +31,21 @@ dev = [
     "mypy>=1.11",
     "pyarrow>=16",
 ]
+# Bonus-turn Go network training (uv sync --group train). The app itself never needs torch: it runs
+# trained networks with onnxruntime.
+train = [
+    "torch>=2.5",
+    "onnx>=1.16",
+    "onnxscript>=0.1",
+]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [build-system]
 requires = ["hatchling>=1.25"]
@@ -47,6 +62,7 @@ markers = [
     "katago: requires a real KataGo binary and model (set GOBOT_KATAGO_BIN / models present)",
     "slow: long-running test",
     "dataset: requires downloaded evaluation datasets in data/testsets",
+    "train: requires the train dependency group (torch); uv sync --group train",
 ]
 
 [tool.ruff]

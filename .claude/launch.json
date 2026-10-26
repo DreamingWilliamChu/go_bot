@@ -63,6 +63,18 @@
         "--strictPort"
       ],
       "port": 5174
+    },
+    {
+      "name": "backend-dev",
+      "runtimeExecutable": ".venv/bin/gobot",
+      "runtimeArgs": [
+        "serve",
+        "--port",
+        "8020",
+        "--no-tunnel",
+        "--no-engine-warmup"
+      ],
+      "port": 8020
     }
   ]
 }

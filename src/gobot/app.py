@@ -22,6 +22,13 @@ from gobot.engine.katago import EngineError, EngineUnavailable, QueryError
 from gobot.engine.query import RULES, AnalyzeParams, Position
 from gobot.engine.service import EngineService
 from gobot.settings import Settings
+from gobot.variant.service import VariantAnalysisService
+from gobot.variant.sources import (
+    filter_katago_result,
+    katago_evaluator_spec,
+    katago_moves_this_turn,
+    snapshot_position,
+)
 from gobot.web.account import is_mac
 
 log = logging.getLogger("gobot.app")
@@ -71,6 +78,7 @@ def create_app(
         if warm is not None and not warm.done():
             warm.cancel()
         await svc.manager.shutdown()
+        await asyncio.to_thread(app.state.variant_search.shutdown)
 
     app = FastAPI(title="gobot", version=__version__, lifespan=lifespan)
     app.state.settings = settings
@@ -78,6 +86,7 @@ def create_app(
     app.state.pair_url = pair_url
     app.state.accounts = accounts
     app.state.tunnel = None  # gobot.tunnel.Tunnel, set by the server with --tunnel
+    app.state.variant_search = VariantAnalysisService()  # bonus-search worker, started on first use
 
     # ------------------------------------------------------------------ basics
     @app.get("/api/health")
@@ -170,6 +179,26 @@ def create_app(
         segno.make(url, error="m").save(buf, kind="svg", scale=6, border=2, dark="#111", light="#fff")
         return Response(buf.getvalue(), media_type="image/svg+xml", headers={"Cache-Control": "no-store"})
 
+    def resolve_evaluator(name: str, size: int) -> tuple[dict[str, Any] | None, str]:
+        """Evaluator spec for the bonus search: heuristic, katago-net or net:<id>."""
+        if name == "heuristic":
+            return {"kind": "heuristic"}, ""
+        if name == "katago-net":
+            spec = katago_evaluator_spec(app.state.engine)
+            if spec is None:
+                return None, "KataGo is not installed here; choose the heuristic evaluator."
+            return spec, ""
+        if name.startswith("net:"):
+            from gobot.variant.models.registry import find_model
+
+            m = find_model(settings.variant_dir, name[4:])
+            if m is None:
+                return None, f"Variant network {name[4:]!r} is not installed."
+            if size not in m.sizes:
+                return None, f"Variant network {m.id} supports {', '.join(f'{s}x{s}' for s in m.sizes)} only."
+            return {"kind": "variant-net", "path": str(m.onnx_path)}, ""
+        return None, f"unknown evaluator {name!r}"
+
     # ------------------------------------------------------------------ analysis websocket
     @app.websocket("/api/analyze")
     async def analyze_ws(ws: WebSocket) -> None:
@@ -185,7 +214,9 @@ def create_app(
                 with contextlib.suppress(Exception):
                     await ws.send_json(msg)
 
-        async def run(request_id: str, pos: Position, params: AnalyzeParams) -> None:
+        async def run(
+            request_id: str, pos: Position, params: AnalyzeParams, variant_state: Any = None
+        ) -> None:
             mgr = svc.manager
             if not (mgr.proc and mgr.proc.alive and mgr.proc.state == "ready"):
                 await send({"type": "engine-starting", "requestId": request_id})
@@ -196,6 +227,8 @@ def create_app(
                         if current["requestId"] != request_id:
                             continue  # superseded on our side too
                         res["requestId"] = request_id
+                        if variant_state is not None and res.get("type") in ("partial", "final"):
+                            filter_katago_result(res, variant_state)
                         if res.get("type") in ("partial", "final"):
                             res["engine"] = {
                                 "modelId": mgr.model_id,
@@ -217,12 +250,88 @@ def create_app(
                 log.exception("analysis failed")
                 await send({"type": "error", "requestId": request_id, "kind": "internal", "message": str(e)})
 
+        async def run_variant(
+            request_id: str, state: Any, spec: dict[str, Any], params: AnalyzeParams
+        ) -> None:
+            vs: VariantAnalysisService = ws.app.state.variant_search
+            await send({"type": "engine-starting", "requestId": request_id, "source": "variant"})
+            try:
+                gen = vs.analyze(client, state, spec, params.max_time, params.max_visits)
+                async with contextlib.aclosing(gen):  # type: ignore[type-var]
+                    async for res in gen:
+                        if current["requestId"] != request_id:
+                            continue
+                        res["requestId"] = request_id
+                        if res.get("type") == "error":
+                            res.setdefault("kind", "variant")
+                        await send(res)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:  # pragma: no cover - defensive
+                log.exception("variant analysis failed")
+                await send({"type": "error", "requestId": request_id, "kind": "internal", "message": str(e)})
+
+        def variant_target(msg: dict[str, Any], rid: str) -> tuple[Any, str | None]:
+            """The public state of the bonus game a request names, or an error message."""
+            v = msg.get("variant") or {}
+            store = ws.app.state.variant_store
+            try:
+                game = store.load(str(v.get("gameId", "")))
+            except Exception:
+                return None, "That bonus game no longer exists."
+            if v.get("revision") != game.revision:
+                return None, "stale"
+            if game.state.terminal:
+                return None, "The game is over."
+            return game.state, None
+
+        def start(coro: Any) -> None:
+            t = asyncio.create_task(coro)
+            tasks.add(t)
+            t.add_done_callback(tasks.discard)
+
         try:
             while True:
                 msg = await ws.receive_json()
                 kind = msg.get("type")
                 rid = str(msg.get("requestId") or uuid.uuid4().hex[:8])
+                if kind == "analyze" and msg.get("variant"):
+                    try:
+                        params = AnalyzeParams.model_validate(msg.get("params") or {})
+                    except ValidationError as e:
+                        await send(
+                            {"type": "error", "requestId": rid, "kind": "invalid", "message": _short(e)}
+                        )
+                        continue
+                    state, err = variant_target(msg, rid)
+                    if err is not None:
+                        await send(
+                            {
+                                "type": "error",
+                                "requestId": rid,
+                                "kind": "stale" if err == "stale" else "invalid",
+                                "message": err,
+                            }
+                        )
+                        continue
+                    current["requestId"] = rid
+                    source = msg.get("source", "variant")
+                    if source == "katago":
+                        ws.app.state.variant_search.cancel(client)
+                        params = params.model_copy(update={"same_color_moves": katago_moves_this_turn(state)})
+                        start(run(rid, snapshot_position(state), params, state))
+                        continue
+                    spec, err = resolve_evaluator(
+                        str(msg.get("evaluator") or "katago-net"), state.config.size
+                    )
+                    if spec is None:
+                        await send({"type": "error", "requestId": rid, "kind": "unavailable", "message": err})
+                        continue
+                    await svc.manager.cancel(client)
+                    start(run_variant(rid, state, spec, params))
+                    continue
                 if kind == "analyze":
+                    ws.app.state.variant_search.cancel(client)
                     try:
                         pos = Position.model_validate(msg.get("position") or {})
                         params = AnalyzeParams.model_validate(msg.get("params") or {})
@@ -232,18 +341,18 @@ def create_app(
                         )
                         continue
                     current["requestId"] = rid
-                    t = asyncio.create_task(run(rid, pos, params))
-                    tasks.add(t)
-                    t.add_done_callback(tasks.discard)
+                    start(run(rid, pos, params))
                 elif kind == "cancel":
                     if current["requestId"] == rid:
                         await svc.manager.cancel(client)
+                        ws.app.state.variant_search.cancel(client)
                 elif kind == "ping":
                     await send({"type": "pong"})
         except WebSocketDisconnect:
             pass
         finally:
             await svc.manager.cancel(client)
+            ws.app.state.variant_search.cancel(client)
             for t in tasks:
                 t.cancel()
 
@@ -251,6 +360,11 @@ def create_app(
     from gobot.web.photos import attach as attach_photos
 
     attach_photos(app, settings)
+
+    # ------------------------------------------------------------------ bonus-turn Go games
+    from gobot.web.variant import attach as attach_variant
+
+    attach_variant(app, settings)
 
     # ------------------------------------------------------------------ sign-in, account, tunnel
     from gobot.web.account import attach as attach_account

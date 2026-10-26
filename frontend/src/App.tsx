@@ -1,16 +1,50 @@
-import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { api, ApiError, type AuthInfo, type Preset, type StatusResponse } from './api/client'
-import { useAnalysis } from './analysis/useAnalysis'
+import { type BonusSource, useAnalysis } from './analysis/useAnalysis'
 import { colorName } from './analysis/format'
-import { type Color, type GameState, currentBoard, newGame, nextPlayer } from './game/game'
+import { type Color, type GameState, type Setup, type Stone, collapseToSetup, currentBoard, newGame, nextPlayer } from './game/game'
 import { FRESH_ROUND, type KeepRound, type Point, advanceRound } from './game/keepRound'
 import { BoardScreen } from './screens/BoardScreen'
+import { type SourceOption, VariantBoardScreen } from './screens/VariantBoardScreen'
+import { variantApi } from './variant/api'
+import { BonusEntryDialog } from './variant/BonusEntryDialog'
+import { BonusStateDialog } from './variant/BonusStateDialog'
+import { DEFAULT_BONUS_PREFS, type BonusPrefs, type BonusStateInput, type VariantView } from './variant/types'
+import { useVariantGame } from './variant/useVariantGame'
 import { LoginScreen } from './screens/LoginScreen'
 import { PhotoScreen } from './screens/PhotoScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import { load, loadRaw, save } from './storage'
 
 type Tab = 'board' | 'photo' | 'settings'
+
+// Which game the Board tab shows. The standard game (gobot.game.v1) is never changed by Bonus Mode.
+type Session = { kind: 'standard' } | { kind: 'variant'; gameId: string }
+
+function loadSession(): Session {
+  const s = loadRaw<Session>('gobot.session.v1')
+  return s && s.kind === 'variant' && typeof s.gameId === 'string' ? s : { kind: 'standard' }
+}
+
+// v2 made 3 bonuses each the default. v1 saved the whole settings object, so a stored 2/2 is the old
+// default rather than a choice: carry the other settings over and start on the new default once.
+function loadBonusPrefs(): BonusPrefs {
+  if (loadRaw<BonusPrefs>('gobot.bonusPrefs.v2')) return load('gobot.bonusPrefs.v2', DEFAULT_BONUS_PREFS)
+  const old = load('gobot.bonusPrefs.v1', DEFAULT_BONUS_PREFS)
+  const wasDefault = old.blackBonuses === 2 && old.whiteBonuses === 2
+  return wasDefault ? { ...old, blackBonuses: 3, whiteBonuses: 3 } : old
+}
+
+// Settings saved while the judge trigger was called "choice" ("you choose").
+function withTrigger(p: BonusPrefs): BonusPrefs {
+  return (p.trigger as string) === 'choice' ? { ...p, trigger: 'judge' } : p
+}
+
+// A position without history waiting for its bonus state (photo, or a branch of the standard game).
+interface PendingImport {
+  setup: Setup
+  provenance: 'photo' | 'branch'
+}
 
 // The script this page was loaded from; null in `npm run dev` (no built assets there).
 const OWN_BUILD =
@@ -21,7 +55,19 @@ interface Prefs {
   customSeconds: number
   showOwnership: boolean
   autoAnalyze: boolean
-  keepMoves: number // Keep color: how many moves in a row the analysis shows
+  keepMoves: number // Keep color: how many moves ahead the analysis shows (look-ahead window)
+  bonusSource: BonusSource // analysis source for bonus games
+}
+
+interface VariantModelInfo {
+  id: string
+  label: string
+  sizes: number[]
+}
+
+interface EvaluatorsResponse {
+  sources: { id: string; label: string; available: boolean }[]
+  models: VariantModelInfo[]
 }
 
 const DEFAULT_PRESETS: Preset[] = [
@@ -29,7 +75,14 @@ const DEFAULT_PRESETS: Preset[] = [
   { id: 'standard', label: 'Standard', seconds: 6 },
   { id: 'deep', label: 'Deep', seconds: 20 },
 ]
-const DEFAULT_PREFS: Prefs = { presetId: 'deep', customSeconds: 10, showOwnership: false, autoAnalyze: true, keepMoves: 3 }
+const DEFAULT_PREFS: Prefs = {
+  presetId: 'deep',
+  customSeconds: 10,
+  showOwnership: false,
+  autoAnalyze: true,
+  keepMoves: 3,
+  bonusSource: 'katago-net',
+}
 
 // v2 made Deep the default. v1 saved the old default on first load, so a saved
 // v1 preset can't be told apart from a choice: carry the other prefs over and
@@ -55,8 +108,16 @@ function loadGame(): GameState {
 export function App() {
   const [tab, setTab] = useState<Tab>(() => (location.hash.startsWith('#photo') ? 'photo' : 'board'))
   const [game, setGameState] = useState<GameState>(loadGame)
-  // Keep color: while set, every move is played by this colour instead of alternating.
-  const [keepColor, setKeepColor] = useState<Color | null>(null)
+  // Keep color: while set, every move is played by this colour instead of alternating, until the
+  // button is tapped again (a manual lock without a move limit; kept across reloads).
+  const [keepColor, setKeepColorState] = useState<Color | null>(() => {
+    const k = loadRaw<{ color: Color | null }>('gobot.keep.v1')?.color
+    return k === 'B' || k === 'W' ? k : null
+  })
+  const setKeepColor = useCallback((c: Color | null) => {
+    setKeepColorState(c)
+    save('gobot.keep.v1', { color: c })
+  }, [])
   const [keepRound, setKeepRound] = useState<KeepRound>(FRESH_ROUND)
   const toMove = keepColor ?? nextPlayer(game)
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs)
@@ -64,6 +125,12 @@ export function App() {
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const [auth, setAuth] = useState<AuthInfo | null>(null)
   const toastTimer = useRef<number | undefined>(undefined)
+  const [session, setSessionState] = useState<Session>(loadSession)
+  const [bonusPrefs, setBonusPrefsState] = useState<BonusPrefs>(() => withTrigger(loadBonusPrefs()))
+  const [lastBonusGame, setLastBonusGame] = useState<string | null>(() => loadRaw<{ id: string }>('gobot.bonusLast.v1')?.id ?? null)
+  const [entryOpen, setEntryOpen] = useState(false)
+  const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
+  const [bonusBusy, setBonusBusy] = useState(false)
 
   const toast = useCallback((m: string) => {
     setToastMsg(m)
@@ -96,6 +163,69 @@ export function App() {
   }, [refreshAuth])
 
   const analysis = useAnalysis(refreshStatus)
+
+  const setSession = useCallback((s: Session) => {
+    setSessionState(s)
+    save('gobot.session.v1', s)
+    if (s.kind === 'variant') {
+      setLastBonusGame(s.gameId)
+      save('gobot.bonusLast.v1', { id: s.gameId })
+    }
+  }, [])
+  const setBonusPrefs = useCallback((p: BonusPrefs) => {
+    setBonusPrefsState(p)
+    save('gobot.bonusPrefs.v2', p)
+  }, [])
+  const variant = useVariantGame(session.kind === 'variant' ? session.gameId : null, toast, () => {
+    setSession({ kind: 'standard' })
+    setLastBonusGame(null)
+    save('gobot.bonusLast.v1', null)
+  })
+  const inBonus = session.kind === 'variant'
+  const [evaluators, setEvaluators] = useState<EvaluatorsResponse | null>(null)
+  useEffect(() => {
+    if (!inBonus || evaluators || !auth || auth.required) return
+    api
+      .get<EvaluatorsResponse>('/api/variant/evaluators')
+      .then(setEvaluators)
+      .catch(() => undefined)
+  }, [inBonus, evaluators, auth])
+
+  // Bonus game created or opened: show it.
+  const enterBonus = useCallback(
+    (v: VariantView) => {
+      analysis.invalidate()
+      variant.setView(v)
+      setSession({ kind: 'variant', gameId: v.gameId })
+      setEntryOpen(false)
+      setPendingImport(null)
+      setTab('board')
+    },
+    [analysis.invalidate, variant.setView, setSession],
+  )
+
+  const runBonus = useCallback(
+    async (f: () => Promise<VariantView>) => {
+      setBonusBusy(true)
+      try {
+        enterBonus(await f())
+      } catch (e) {
+        toast((e as Error).message)
+      } finally {
+        setBonusBusy(false)
+      }
+    },
+    [enterBonus, toast],
+  )
+
+  const startImport = useCallback(
+    (pi: PendingImport, st: BonusStateInput) => {
+      const prefs = { ...bonusPrefs, size: pi.setup.size, komi: pi.setup.komi }
+      const stones: Stone[] = pi.setup.initialStones
+      void runBonus(() => variantApi.importPosition(prefs, stones, st, pi.provenance))
+    },
+    [bonusPrefs, runBonus],
+  )
 
   // Pairing link: https://mac:8000/#pair=TOKEN (fresh load from the QR code, or a hash change when
   // the link is opened in a tab that already shows the app).
@@ -166,6 +296,54 @@ export function App() {
   const presets = status?.presets ?? DEFAULT_PRESETS
   const seconds =
     prefs.presetId === 'custom' ? prefs.customSeconds : presets.find((p) => p.id === prefs.presetId)?.seconds ?? 6
+
+  // Analysis sources for the current bonus game; a trained network only for sizes it supports.
+  const bonusSize = variant.view?.state.size ?? 0
+  const sources: SourceOption[] = useMemo(() => {
+    const has = (id: string) => evaluators?.sources.find((s) => s.id === id)?.available ?? false
+    const list: SourceOption[] = [
+      { id: 'katago', label: 'KataGo (standard Go)', available: has('katago'), why: 'KataGo is not available' },
+      { id: 'katago-net', label: 'Bonus search · KataGo net', available: has('katago-net'), why: 'KataGo is not available' },
+      { id: 'heuristic', label: 'Bonus search · heuristic', available: true },
+    ]
+    for (const m of evaluators?.models ?? [])
+      list.push({
+        id: `net:${m.id}`,
+        label: `Bonus search · ${m.label}`,
+        available: m.sizes.includes(bonusSize),
+        why: `Trained for ${m.sizes.map((n) => `${n}×${n}`).join(', ')} only`,
+      })
+    return list
+  }, [evaluators, bonusSize])
+  const bonusSource: BonusSource = sources.find((o) => o.id === prefs.bonusSource && o.available)
+    ? prefs.bonusSource
+    : (sources.find((o) => o.available && o.id !== 'katago')?.id ?? 'heuristic')
+
+  // Bonus games: analyse each new position (Auto) with the chosen source; leaving Bonus Mode stops it.
+  // Erase there works as on the standard board: no analysis until it is turned off again.
+  const bonusAsked = useRef<string | null>(null)
+  const [bonusErasing, setBonusErasingState] = useState(false)
+  const startBonus = useCallback(() => {
+    const v = variant.view
+    if (!v || v.state.phase === 'terminal') return
+    analysis.startBonus(v.gameId, v.revision, bonusSource, seconds)
+  }, [variant.view, analysis.startBonus, bonusSource, seconds])
+  useEffect(() => {
+    const v = variant.view
+    if (!inBonus) {
+      if (bonusAsked.current !== null) analysis.invalidate()
+      bonusAsked.current = null
+      setBonusErasingState(false)
+      return
+    }
+    if (!v || !evaluators) return
+    const key = `${v.gameId}:${v.revision}:${bonusSource}`
+    if (bonusAsked.current === key) return
+    bonusAsked.current = key
+    analysis.invalidate()
+    if (prefs.autoAnalyze && !bonusErasing && v.state.phase !== 'terminal') startBonus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inBonus, variant.view?.gameId, variant.view?.revision, bonusSource, evaluators])
 
   const gameRef = useRef(game)
   gameRef.current = game
@@ -244,9 +422,20 @@ export function App() {
               </button>
             ))}
           </nav>
-          {tab === 'board' ? (
+          {tab === 'board' && inBonus && variant.view ? (
+            <span class={variant.view.state.bonusActive ? 'to-play keep' : 'to-play'} data-testid="to-play">
+              <span class={`dot ${variant.view.state.toMove}`} /> {colorName(variant.view.state.toMove)} to play
+              {variant.view.state.bonusActive ? (
+                <span class="lock-note">
+                  {' '}
+                  · bonus {variant.view.state.turnMoves - variant.view.state.movesLeft + 1}/{variant.view.state.turnMoves}
+                </span>
+              ) : null}
+            </span>
+          ) : tab === 'board' && !inBonus ? (
             <span class={keepColor ? 'to-play keep' : 'to-play'} data-testid="to-play">
               <span class={`dot ${toMove}`} /> {colorName(toMove)} to play
+              {keepColor ? <span class="lock-note"> · kept (manual)</span> : null}
             </span>
           ) : null}
         </div>
@@ -273,6 +462,50 @@ export function App() {
             }}
             toast={toast}
           />
+        ) : tab === 'board' && inBonus ? (
+          variant.view ? (
+            <VariantBoardScreen
+              view={variant.view}
+              busy={variant.busy || bonusBusy}
+              act={variant.act}
+              prefs={bonusPrefs}
+              setPrefs={setBonusPrefs}
+              onNewGame={() => void runBonus(() => variantApi.create(bonusPrefs))}
+              onLeave={() => {
+                if (!confirm('Turn Bonus Mode off? The bonus game is kept (Bonus Mode → Resume), and your standard game comes back.'))
+                  return
+                setSession({ kind: 'standard' })
+              }}
+              onOpenRecord={(file) =>
+                void runBonus(async () => variantApi.open(JSON.parse(await file.text()) as unknown))
+              }
+              toast={toast}
+              erasing={bonusErasing}
+              setErasing={(on, resume = true) => {
+                setBonusErasingState(on)
+                if (on) analysis.invalidate()
+                else if (resume && prefs.autoAnalyze) startBonus()
+              }}
+              analysis={analysis}
+              engine={status?.engine ?? null}
+              presets={presets}
+              presetId={prefs.presetId}
+              customSeconds={prefs.customSeconds}
+              autoAnalyze={prefs.autoAnalyze}
+              onPreset={(id) => setPrefs({ ...prefs, presetId: id })}
+              onCustomSeconds={(sec) => setPrefs({ ...prefs, customSeconds: sec })}
+              onAnalyze={startBonus}
+              onStop={analysis.stop}
+              onToggleAuto={() => setPrefs({ ...prefs, autoAnalyze: !prefs.autoAnalyze })}
+              source={bonusSource}
+              sources={sources}
+              onSource={(src) => setPrefs({ ...prefs, bonusSource: src })}
+            />
+          ) : (
+            <div class="panel">
+              <p>Loading the bonus game…</p>
+            </div>
+          )
         ) : tab === 'board' ? (
           <BoardScreen
             game={game}
@@ -288,19 +521,14 @@ export function App() {
             }}
             keepRound={keepRound}
             advanceKeep={(shown: Point[], played: Point | null) => {
-              // Also called right before a setGame, which asks for the moves left.
+              // Also called right before a setGame, which asks for the moves left in the round. The
+              // lock stays on (no move limit); only the look-ahead round starts again.
               const next = advanceRound(keepRound, shown, played, prefs.keepMoves)
-              if (!next) {
-                // Moves in a row used up: back to alternating, so the opponent plays next.
-                setKeepColor(null)
-                setKeepRound(FRESH_ROUND)
-                keepRef.current = null
-                return
-              }
               setKeepRound(next)
               if (keepColor) keepRef.current = { color: keepColor, moves: prefs.keepMoves - next.done }
             }}
             keepMoves={prefs.keepMoves}
+            onBonusMode={() => setEntryOpen(true)}
             erasing={erasing}
             setErasing={setErasing}
             analysis={analysis}
@@ -324,6 +552,11 @@ export function App() {
             status={status}
             toast={toast}
             onConfirmed={(setup) => {
+              if (inBonus) {
+                // A photo cannot show the bonus history: ask for the bonus state first.
+                setPendingImport({ setup, provenance: 'photo' })
+                return
+              }
               const g: GameState = { setup, moves: [], redo: [], revision: game.revision + 1 }
               analysis.invalidate()
               setGameState(g)
@@ -338,6 +571,59 @@ export function App() {
           <SettingsScreen status={status} auth={auth} refreshStatus={refreshStatus} toast={toast} />
         )}
       </main>
+
+      {entryOpen ? (
+        <BonusEntryDialog
+          prefs={bonusPrefs}
+          setPrefs={setBonusPrefs}
+          canResume={!!lastBonusGame}
+          canBranch={game.moves.length > 0 || game.setup.initialStones.length > 0}
+          busy={bonusBusy}
+          onResume={() => {
+            if (!lastBonusGame) return
+            analysis.invalidate()
+            setEntryOpen(false)
+            setSession({ kind: 'variant', gameId: lastBonusGame })
+          }}
+          onNew={() => void runBonus(() => variantApi.create(bonusPrefs))}
+          onBranch={() => {
+            setEntryOpen(false)
+            setPendingImport({ setup: { ...collapseToSetup(game), initialPlayer: toMove }, provenance: 'branch' })
+          }}
+          onCancel={() => setEntryOpen(false)}
+        />
+      ) : null}
+
+      {pendingImport ? (
+        <BonusStateDialog
+          title={pendingImport.provenance === 'photo' ? 'Bonus state of the photographed position' : 'Bonus analysis of this position'}
+          stones={pendingImport.setup.initialStones}
+          toMove={pendingImport.setup.initialPlayer}
+          prefs={{ ...bonusPrefs, size: pendingImport.setup.size, komi: pendingImport.setup.komi }}
+          provenance={pendingImport.provenance}
+          busy={bonusBusy}
+          onStart={(st) => startImport(pendingImport, st)}
+          onCancel={() => setPendingImport(null)}
+          onStandard={
+            pendingImport.provenance === 'photo'
+              ? () => {
+                  // Analyse the photo as ordinary Go (the previous behaviour), leaving Bonus Mode.
+                  const pi = pendingImport
+                  setPendingImport(null)
+                  setSession({ kind: 'standard' })
+                  const g: GameState = { setup: pi.setup, moves: [], redo: [], revision: game.revision + 1 }
+                  analysis.invalidate()
+                  setGameState(g)
+                  setKeepColor(null)
+                  setKeepRound(FRESH_ROUND)
+                  setErasing(false, false)
+                  setTab('board')
+                  analysis.start(g, prefsRef.current.seconds)
+                }
+              : undefined
+          }
+        />
+      ) : null}
 
       {newBuild ? (
         <div class="update-bar" role="status" data-testid="update-bar">

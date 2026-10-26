@@ -53,7 +53,7 @@ export function summarize(r: AnalysisResult, modelName: string | null): string |
     )
   }
   const second = r.candidates[1]
-  if (second) {
+  if (second && second.blackScoreLead !== null && top.blackScoreLead !== null) {
     const sign = p === 'B' ? 1 : -1
     const diff = sign * (second.blackScoreLead - top.blackScoreLead)
     const close = Math.abs(diff) < 0.5

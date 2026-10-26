@@ -9,6 +9,15 @@ This repository's own code is licensed under the GNU Affero General Public Licen
 | KataGo engine (v1.18.x) | https://github.com/lightvector/KataGo | MIT (© David J Wu and contributors). Vendored third-party parts carry their own licenses (see KataGo's `cpp/external`) | Installed separately via Homebrew on the Mac (`brew install katago`); official Linux release binary for tests/CI |
 | kata1 neural networks (`kata1-tf3-b11c768…`, `kata1-tf3-b10c512…`, `kata1-tf2-b10c384…`, `kata1-b18c384nbt…`, `kata1-b28c512nbt…`) | https://katagotraining.org/networks/ | KataGo Neural Network License (MIT-style), https://katagotraining.org/network_license/ | Downloaded by `scripts/download_models.sh`; versions and sha256 in `models/manifest.json` |
 
+## Bonus-turn Go network (optional training)
+
+| Component | Source | License | How it is used |
+|---|---|---|---|
+| PyTorch | https://pytorch.org | BSD-3-Clause | Training only (`uv sync --group train`); the app never imports it |
+| ONNX, onnxscript | https://onnx.ai | Apache-2.0 / MIT | Exporting trained networks for ONNX Runtime |
+| KataGo network as teacher | kata1 networks above | KataGo Neural Network License | During training (`gobot variant pipeline`), KataGo's raw policy on ordinary-Go positions is used as a *distillation target* for the small variant network. No KataGo weights are copied or fine-tuned. KataGo is also an evaluation opponent and an optional approximate evaluator |
+| Trained variant networks (`data/variant/models/`) | Produced locally by this repository's training pipeline | Same as this repository; their `model.json` records the provenance (teacher network, self-play games, training steps) | Not committed to git |
+
 ## Photo recognition
 
 | Component | Source | License | How it is used |

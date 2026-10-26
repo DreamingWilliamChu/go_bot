@@ -23,6 +23,10 @@ Photograph a physical Go board with your iPhone, or choose a photo. Your Mac rec
   - Localhost-only by default. `--lan` lets your phone connect after scanning a pairing QR code.
   - Optional `--https`, with a private certificate authority, for the live camera preview.
 - **Remote access with sign-in:** `--tunnel` makes the app reachable from anywhere through a Cloudflare Tunnel.
+- **Keep color and Bonus Mode (bonus-turn Go):**
+  - *Keep color* is a manual lock: the chosen colour plays every move until you tap it again.
+  - *Bonus Mode* plays a variant in which each player has a few bonus turns of several moves in a row ([rules](docs/BONUS_GO.md)). By default an outside **judge** decides when they happen: before the first move of a turn the judge taps Keep color ("Grant bonus"); a grant can be undone and redone like a move. Alternatively a game can use **random** bonuses, scheduled secretly by the Mac. To the players and the analysis the timing is random either way: the analysis never suggests a bonus and treats future ones as chance. Either way the board announces the bonus before the move, locks the player for the bonus moves, then switches, and shows the bonuses left.
+  - Bonus positions can be analysed with standard KataGo (which ignores future bonuses), with a bonus-aware search using KataGo's network as an approximate evaluator, or with a small network trained by bonus self-play ([training](docs/VARIANT_TRAINING.md), [design](docs/VARIANT_ARCHITECTURE.md)).
   - Every device except the Mac signs in with a username and password, which you set and change under *Engine → Account*.
 
 | Check the photo, correct the stones | Analysis (desktop) | Analysis (iPhone size) |
@@ -114,6 +118,8 @@ One photo cannot show which moves led to the position or whether a ko is current
 | `./scripts/update.sh` | Pull and refresh |
 | `uv run gobot models list` | Show installed networks |
 | `./scripts/fetch_test_data.sh && uv run gobot eval` | Recognition accuracy on the public test sets (and your saved test cases) |
+| `uv sync --group train && uv run gobot variant pipeline run --preset local_small` | Train the bonus-turn network (about an hour on an M3 Pro; see docs/VARIANT_TRAINING.md) |
+| `uv run gobot variant bench \| evaluate \| models` | Measure training speed, play paired matches, list installed variant networks |
 
 ## What was verified
 
@@ -134,6 +140,15 @@ All of the following ran in a Linux cloud VM (x86-64, 4 cores, no GPU):
   - In Chromium with the CA trusted: secure context, live camera preview (fake camera) and capture → upload.
   - Pairing link in the browser over HTTP LAN.
   - Chromium-to-LAN HTTPS and websockets could not be tested from the browser here because the sandbox network intercepts them; they were tested from Python instead.
+
+Bonus-turn Go (Keep color, Bonus Mode, the bonus search and the variant network) was built and tested on the M3 Pro
+Mac itself:
+
+- Rules fuzzed against a reference implementation, including same-colour runs, plus tests for turns, passes,
+  scoring, randomness, undo, save/load, hidden-schedule isolation and the search.
+- Playwright on iPhone 13, iPhone SE and desktop sizes, alongside all the standard-Go tests above.
+- A one-hour training run; its measured results and limits are in
+  [docs/VARIANT_TRAINING.md](docs/VARIANT_TRAINING.md#6-what-was-run-on-this-mac-25-october-2026).
 
 ## Checklist for your Mac and iPhone
 

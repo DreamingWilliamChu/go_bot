@@ -1,0 +1,75 @@
+// Undo / Pass / Redo / Erase, and below them Keep color with Bonus Mode beside it. Shared by the standard
+// board and the bonus-game board, so the controls sit in the same place in both.
+
+export interface LockButton {
+  color: 'B' | 'W' // the colour the lock holds (or would hold)
+  on: boolean
+  label: string
+  title: string
+  readOnly?: boolean // Bonus Mode: only a bonus turn turns it on
+  action?: boolean // judge trigger: tapping it grants a bonus now (for the judge)
+  onClick: () => void
+}
+
+interface Props {
+  canUndo: boolean
+  canRedo: boolean
+  busy?: boolean
+  onUndo: () => void
+  onPass: () => void
+  onRedo: () => void
+  erase?: { on: boolean; onClick: () => void }
+  keep: LockButton
+  bonusOn: boolean
+  onBonus: () => void
+}
+
+export function MovesToolbar(p: Props) {
+  const k = p.keep
+  return (
+    <>
+      <div class="toolbar moves">
+        <button class="btn" onClick={p.onUndo} disabled={!p.canUndo || p.busy}>
+          Undo
+        </button>
+        <button class="btn" onClick={p.onPass} disabled={p.busy} data-testid="pass">
+          Pass
+        </button>
+        <button class="btn" onClick={p.onRedo} disabled={!p.canRedo || p.busy}>
+          Redo
+        </button>
+        {p.erase ? (
+          <button
+            class={p.erase.on ? 'btn erase on' : 'btn erase'}
+            onClick={p.erase.onClick}
+            aria-pressed={p.erase.on}
+            title={p.erase.on ? 'Stop erasing and analyse again' : 'Tap stones to take them off the board'}
+            data-testid="erase"
+          >
+            {p.erase.on ? 'Erasing' : 'Erase'}
+          </button>
+        ) : null}
+      </div>
+      <div class="toolbar locks">
+        <button
+          class={`btn keep-color ${k.color}${k.on ? ' on' : ''}${k.readOnly ? ' read-only' : ''}${k.action ? ' use-bonus' : ''}`}
+          onClick={k.onClick}
+          aria-pressed={k.on}
+          title={k.title}
+          data-testid="keep-color"
+        >
+          {k.label}
+        </button>
+        <button
+          class={`btn bonus-mode${p.bonusOn ? ' on' : ''}`}
+          onClick={p.onBonus}
+          aria-pressed={p.bonusOn}
+          title={p.bonusOn ? 'Bonus Mode is on: random bonus turns. Tap to go back to standard Go' : 'Play bonus-turn Go (random bonus turns of several moves)'}
+          data-testid="bonus-mode"
+        >
+          {p.bonusOn ? 'Bonus Mode · on' : 'Bonus Mode'}
+        </button>
+      </div>
+    </>
+  )
+}

@@ -36,6 +36,8 @@ test('manual position: moves, real KataGo analysis, PV stepping, layout', async 
   expect(visits).toBeGreaterThan(0)
   await expect(page.getByTestId('engine-info')).toContainText('KataGo')
   await page.getByRole('button', { name: 'Line' }).first().click()
+  // a slow engine's first line can be a single move, where "next" has nowhere to go
+  await expect(page.getByTestId('pv')).toContainText(/move 1 \/ ([2-9]|\d\d)/)
   await page.getByTestId('pv-next').click()
   await expect(page.getByTestId('pv')).toContainText('move 2')
   await noHorizontalOverflow(page)
@@ -128,4 +130,25 @@ test('photo: wrong board size asks for corners and suggests the right size', asy
   await expect(page.getByTestId('use-corners')).toBeVisible({ timeout: 90_000 })
   await expect(page.getByText('Try 13×13')).toBeVisible()
   await noHorizontalOverflow(page)
+})
+
+test('keep color: a manual lock with no move limit', async ({ page }) => {
+  await page.getByRole('checkbox', { name: 'Auto' }).uncheck()
+  const keep = page.getByTestId('keep-color')
+  await expect(keep).toHaveText('Keep Black')
+  await keep.click()
+  await expect(keep).toHaveAttribute('aria-pressed', 'true')
+  await expect(keep).toHaveText('Keep Black · manual')
+  // more moves than the look-ahead window (3): the lock stays on and every stone is black
+  for (const x of [2, 4, 6, 8, 10]) await tapPoint(page, 0, 19, x, 3)
+  await expect(page.getByText('Move 5')).toBeVisible()
+  await expect(keep).toHaveAttribute('aria-pressed', 'true')
+  const board = page.locator('svg.board').first()
+  await expect(board.locator('circle.stone-b')).toHaveCount(5)
+  await expect(board.locator('circle.stone-w')).toHaveCount(0)
+  await expect(page.getByTestId('to-play')).toContainText('Black to play')
+  // tapping again restores alternation: White moves next
+  await keep.click()
+  await expect(keep).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.getByTestId('to-play')).toContainText('White to play')
 })

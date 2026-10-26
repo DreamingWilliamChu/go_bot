@@ -205,15 +205,60 @@ h3 {
 .board-screen {
   grid-template-columns: minmax(0, 1fr);
 }
+.split-handle {
+  display: none;
+}
 @media (min-width: 900px) {
+  /* the middle track is the draggable bar (SplitHandle), which sets --split-l / --split-r */
   .board-screen,
   .photo-screen.two-col {
-    grid-template-columns: minmax(0, 1.25fr) minmax(320px, 1fr);
+    grid-template-columns: minmax(280px, var(--split-l, 1.25fr)) 14px minmax(320px, var(--split-r, 1fr));
+    column-gap: 0;
     align-items: start;
   }
   .side-col {
     position: sticky;
     top: 64px;
+  }
+  .split-handle {
+    display: block;
+    align-self: stretch;
+    position: relative;
+    cursor: col-resize;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    outline: none;
+  }
+  .split-handle::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 6px;
+    width: 2px;
+    border-radius: 1px;
+    background: transparent;
+    transition: background 0.15s;
+  }
+  .split-handle:hover::before,
+  .split-handle:focus-visible::before,
+  .split-handle.dragging::before {
+    background: var(--accent);
+  }
+  .split-handle .grip {
+    position: sticky;
+    top: calc(50vh - 20px);
+    display: block;
+    width: 6px;
+    height: 40px;
+    margin: 0 auto;
+    border-radius: 3px;
+    background: var(--line);
+  }
+  .split-handle:hover .grip,
+  .split-handle.dragging .grip {
+    background: var(--accent);
   }
 }
 .board-col,
@@ -401,13 +446,16 @@ svg.board .hl {
   flex: 1 1 auto;
   min-width: 72px;
 }
-/* Undo / Pass / Redo: their own row, three equal large buttons. */
+/* Undo / Pass / Redo (/ Erase): their own row, equal large buttons. Four of them must fit a 320px
+   phone (296px column), so no 72px floor: with it the row pushed the page wider than the screen. */
 .toolbar.moves {
   flex-wrap: nowrap;
   margin-bottom: 6px;
 }
 .toolbar.moves .btn {
   flex: 1 1 0;
+  min-width: 0;
+  padding-inline: 6px;
   min-height: 52px;
   font-size: 1.05rem;
 }
@@ -903,4 +951,140 @@ video.live {
 }
 .account-actions {
   margin-top: 12px;
+}
+
+/* ---------------------------------------------------------------- bonus-turn Go */
+/* Keep color and Bonus Mode side by side, in their own row so phones never overflow. */
+.toolbar.locks {
+  flex-wrap: nowrap;
+  margin-bottom: 6px;
+}
+.toolbar.locks .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 46px;
+  white-space: normal;
+  line-height: 1.2;
+}
+.btn.bonus-mode.on {
+  background: #6b3fa0;
+  color: #fff;
+  border: 2px solid #4c2a78;
+  box-shadow: 0 0 0 3px #6b3fa055;
+}
+/* In Bonus Mode Keep color is an indicator: only a bonus turn switches it on. */
+.btn.keep-color.read-only {
+  cursor: help;
+}
+.btn.keep-color.read-only:not(.on) {
+  background: var(--panel);
+  color: var(--muted);
+  border-style: dashed;
+  border-color: var(--line);
+}
+.btn.on-soft {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn.wide {
+  width: 100%;
+  margin-bottom: 10px;
+}
+.lock-note {
+  font-weight: 500;
+}
+.bonus-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  margin-bottom: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  font-weight: 650;
+  text-align: center;
+  line-height: 1.25;
+}
+.bonus-banner.active {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-color: #c99a00;
+}
+.bonus-banner.announce {
+  background: #ffd84d;
+  color: #3d2e00;
+  border-color: #c99a00;
+  font-weight: 750;
+}
+.bonus-banner .dot {
+  flex: none;
+}
+.bonus-status {
+  display: grid;
+  gap: 2px;
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+.bonus-status.active {
+  background: var(--warn-bg);
+  border-color: #c99a00;
+}
+.bonus-result {
+  margin-top: 8px;
+}
+.bonus-settings .field-row.three {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 16px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.45);
+}
+.modal {
+  width: 100%;
+  max-width: 480px;
+  margin: 3vh 0 24px;
+}
+.modal h2 {
+  margin: 0 0 8px;
+  font-size: 1.15rem;
+}
+.modal .row {
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+/* Analysis source for bonus games: long labels wrap onto two columns on phones. */
+.seg.source-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  margin-bottom: 10px;
+}
+.seg.source-picker button {
+  white-space: normal;
+  line-height: 1.2;
+  min-height: 40px;
+}
+.pv-bonus {
+  color: #c99a00;
+  font-weight: 700;
+}
+/* Choice trigger: Keep color is the "Use bonus" button while the player may spend one. */
+.btn.keep-color.use-bonus {
+  background: #ffd84d;
+  color: #3d2e00;
+  border: 2px solid #c99a00;
 }
