@@ -446,13 +446,16 @@ svg.board .hl {
   flex: 1 1 auto;
   min-width: 72px;
 }
-/* Undo / Pass / Redo (/ Erase): their own row, equal large buttons. */
+/* Undo / Pass / Redo (/ Erase): their own row, equal large buttons. Four of them must fit a 320px
+   phone (296px column), so no 72px floor: with it the row pushed the page wider than the screen. */
 .toolbar.moves {
   flex-wrap: nowrap;
   margin-bottom: 6px;
 }
 .toolbar.moves .btn {
   flex: 1 1 0;
+  min-width: 0;
+  padding-inline: 6px;
   min-height: 52px;
   font-size: 1.05rem;
 }

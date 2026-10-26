@@ -36,6 +36,8 @@ test('manual position: moves, real KataGo analysis, PV stepping, layout', async 
   expect(visits).toBeGreaterThan(0)
   await expect(page.getByTestId('engine-info')).toContainText('KataGo')
   await page.getByRole('button', { name: 'Line' }).first().click()
+  // a slow engine's first line can be a single move, where "next" has nowhere to go
+  await expect(page.getByTestId('pv')).toContainText(/move 1 \/ ([2-9]|\d\d)/)
   await page.getByTestId('pv-next').click()
   await expect(page.getByTestId('pv')).toContainText('move 2')
   await noHorizontalOverflow(page)
